@@ -189,4 +189,52 @@ describe("createMachine", () => {
       createMachine("empty", () => []);
     }).toThrow("Machine must have at least one state");
   });
+
+  it("should support getContext and setContext for state-specific contexts", () => {
+    type StateContexts = {
+      idle: undefined;
+      editing: { fileName: string; content: string };
+      saving: { fileName: string; progress: number };
+      globalContext: { userId: string; theme: string };
+    };
+
+    const machine = createMachine<StateContexts>("test", (ctx) => {
+      const { state, on } = ctx;
+      return [
+        state("idle", () => [on("EDIT", "editing")]),
+        state("editing", () => [on("SAVE", "saving"), on("CANCEL", "idle")]),
+        state("saving", () => [
+          on("SUCCESS", "idle"),
+          on("FAILURE", "editing"),
+        ]),
+      ];
+    });
+
+    // Test setting and getting context for different states
+    machine.setContext("editing", { fileName: "test.txt", content: "Hello" });
+    machine.setContext("saving", { fileName: "test.txt", progress: 50 });
+
+    expect(machine.getContext("editing")).toEqual({
+      fileName: "test.txt",
+      content: "Hello",
+    });
+    expect(machine.getContext("saving")).toEqual({
+      fileName: "test.txt",
+      progress: 50,
+    });
+    expect(machine.getContext("idle")).toBeUndefined();
+
+    // Test that context persists across state transitions
+    machine.transition("EDIT");
+    expect(machine.current).toBe("editing");
+    expect(machine.context).toEqual({ fileName: "test.txt", content: "Hello" });
+
+    machine.transition("SAVE");
+    expect(machine.current).toBe("saving");
+    expect(machine.context).toEqual({ fileName: "test.txt", progress: 50 });
+
+    // Test global context with type safety
+    machine.setGlobalOnly({ userId: "user123", theme: "dark" } as StateContexts['globalContext']);
+    expect(machine.globalContext).toEqual({ userId: "user123", theme: "dark" });
+  });
 });

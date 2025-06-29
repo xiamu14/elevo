@@ -12,16 +12,17 @@ export interface MachineConfig<TStates extends Record<string, StateConfig>> {
 }
 
 export interface StateBuilder {
-  (name: string, builder: () => TransitionDefinition[]): StateDefinition;
+  <T = unknown>(name: string, builder: () => TransitionDefinition[]): StateDefinition<T>;
 }
 
 export interface TransitionBuilder {
   (event: string, target: string): TransitionDefinition;
 }
 
-export interface StateDefinition {
+export interface StateDefinition<T = unknown> {
   name: string;
   transitions: TransitionDefinition[];
+  contextType?: T; // For type inference only
 }
 
 export interface TransitionDefinition {
@@ -45,24 +46,29 @@ export interface CurrentState<
   TStates extends Record<string, unknown>,
   TCurrentState extends keyof TStates
 > {
-  transition<TEvent extends string>(
+  transition<TEvent extends string, TContext = unknown>(
     event: TEvent,
-    context?: unknown
+    context?: TContext
   ): void;
 }
 
 export interface Machine<TStates extends Record<string, unknown>> {
   readonly id: string;
   readonly current: keyof TStates;
-  readonly context: unknown;
+  readonly context: TStates[keyof TStates];
   readonly globalContext: Record<string, unknown>;
   readonly currentState: CurrentState<TStates, keyof TStates>;
 
   transition(event: string): void;
   can(state: keyof TStates, event: string): boolean;
-  setGlobalOnly(ctx: Record<string, unknown>): void;
-  watchEntry(state: keyof TStates, fn: (context: unknown) => void): () => void;
-  watchExit(state: keyof TStates, fn: (context: unknown) => void): () => void;
+  setGlobalOnly<TGlobal extends Record<string, unknown>>(ctx: TGlobal): void;
+  
+  // State-specific context methods
+  getContext<TState extends keyof TStates>(state: TState): TStates[TState] | undefined;
+  setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void;
+  
+  watchEntry<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
+  watchExit<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
   toXStateJSON(): XStateConfig;
 }
 
@@ -82,3 +88,8 @@ export interface MachineSnapshot<TMachine extends Machine<Record<string, unknown
   context: TMachine["context"];
   globalContext: TMachine["globalContext"];
 }
+
+// Type helper for defining state machines with typed contexts
+export type StateContextMap<TStates extends Record<string, unknown>> = {
+  [K in keyof TStates]: TStates[K];
+};

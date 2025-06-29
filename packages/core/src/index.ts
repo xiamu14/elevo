@@ -64,7 +64,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
     return transitions?.has(event) || false;
   }
 
-  function setGlobalOnly(ctx: Record<string, unknown>): void {
+  function setGlobalOnly<TGlobal extends Record<string, unknown>>(ctx: TGlobal): void {
     if (!globalLocked) {
       globalContext = ctx;
       globalLocked = true;
@@ -73,11 +73,19 @@ export function createMachine<TStates extends Record<string, unknown>>(
     }
   }
 
-  function watchEntry(state: string, fn: (context: unknown) => void): () => void {
+  function getContext<TState extends keyof TStates>(state: TState): TStates[TState] | undefined {
+    return privateContexts[state as string] as TStates[TState] | undefined;
+  }
+
+  function setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void {
+    privateContexts[state as string] = context;
+  }
+
+  function watchEntry<TContext = unknown>(state: string, fn: (context: TContext) => void): () => void {
     if (!entryWatchers[state]) {
       entryWatchers[state] = [];
     }
-    entryWatchers[state].push(fn);
+    entryWatchers[state].push(fn as (context: unknown) => void);
 
     return () => {
       entryWatchers[state] =
@@ -85,11 +93,11 @@ export function createMachine<TStates extends Record<string, unknown>>(
     };
   }
 
-  function watchExit(state: string, fn: (context: unknown) => void): () => void {
+  function watchExit<TContext = unknown>(state: string, fn: (context: TContext) => void): () => void {
     if (!exitWatchers[state]) {
       exitWatchers[state] = [];
     }
-    exitWatchers[state].push(fn);
+    exitWatchers[state].push(fn as (context: unknown) => void);
 
     return () => {
       exitWatchers[state] = exitWatchers[state]?.filter((f) => f !== fn) || [];
@@ -115,7 +123,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
   }
 
   const currentStateProxy: CurrentState<TStates, keyof TStates> = {
-    transition<TEvent extends string>(event: TEvent, context?: unknown): void {
+    transition<TEvent extends string, TContext = unknown>(event: TEvent, context?: TContext): void {
       const transitions = transitionMap.get(currentState);
       const target = transitions?.get(event);
       
@@ -147,7 +155,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
       return currentState as keyof TStates;
     },
     get context() {
-      return privateContexts[currentState];
+      return privateContexts[currentState] as TStates[keyof TStates];
     },
     get globalContext() {
       return globalContext;
@@ -158,6 +166,8 @@ export function createMachine<TStates extends Record<string, unknown>>(
     transition,
     can,
     setGlobalOnly,
+    getContext,
+    setContext,
     watchEntry,
     watchExit,
     toXStateJSON,
@@ -165,15 +175,15 @@ export function createMachine<TStates extends Record<string, unknown>>(
 }
 
 function createBuilderContext(): BuilderContext {
-  const state: StateBuilder = (
+  const state: StateBuilder = <T = unknown>(
     name: string,
     builder: () => TransitionDefinition[]
-  ) => {
+  ): StateDefinition<T> => {
     const transitions = builder();
     return {
       name,
       transitions: transitions.map((t) => t as unknown as TransitionDefinition),
-    };
+    } as StateDefinition<T>;
   };
 
   const on: TransitionBuilder = (event: string, target: string) => {
@@ -184,4 +194,26 @@ function createBuilderContext(): BuilderContext {
   };
 
   return { state, on };
+}
+
+// Helper function to create a machine with better type inference
+export function createMachineWithContext<TContexts extends Record<string, unknown>>() {
+  return function<TMachineId extends string>(
+    id: TMachineId,
+    builder: (ctx: BuilderContext) => StateDefinition[]
+  ): Machine<TContexts> {
+    return createMachine<TContexts>(id, builder);
+  };
+}
+
+// Helper to create typed transition function
+export function createTypedTransition<TContexts extends Record<string, unknown>>(
+  machine: Machine<TContexts>
+) {
+  return function<TState extends keyof TContexts>(
+    event: string,
+    context?: TContexts[TState]
+  ): void {
+    machine.currentState.transition(event, context);
+  };
 }
