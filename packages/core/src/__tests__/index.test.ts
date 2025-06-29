@@ -237,4 +237,94 @@ describe("createMachine", () => {
     machine.setGlobalOnly({ userId: "user123", theme: "dark" } as StateContexts['globalContext']);
     expect(machine.globalContext).toEqual({ userId: "user123", theme: "dark" });
   });
+
+  it("should support clearOnExit option for state contexts", () => {
+    type StateContexts = {
+      temp: { data: string };
+      persistent: { data: string };
+      final: undefined;
+    };
+
+    const machine = createMachine<StateContexts>("test", (ctx) => {
+      const { state, on } = ctx;
+      return [
+        state<StateContexts['temp']>("temp", () => [on("NEXT", "persistent")], { clearOnExit: true }),
+        state<StateContexts['persistent']>("persistent", () => [on("FINISH", "final")], { clearOnExit: false }),
+        state("final", () => []),
+      ];
+    });
+
+    // Machine starts at "temp" state (first state defined)
+    expect(machine.current).toBe("temp");
+
+    // Set context for temp state
+    machine.setContext("temp", { data: "temporary" });
+    expect(machine.getContext("temp")).toEqual({ data: "temporary" });
+
+    // Transition from temp to persistent (should clear temp context due to clearOnExit: true)
+    machine.currentState.transition("NEXT", { data: "persistent data" });
+    expect(machine.current).toBe("persistent");
+    
+    // Check that temp context was cleared (clearOnExit: true)
+    expect(machine.getContext("temp")).toBeUndefined();
+    
+    // Check that persistent context exists
+    expect(machine.getContext("persistent")).toEqual({ data: "persistent data" });
+
+    // Transition to final state (should NOT clear persistent context due to clearOnExit: false)
+    machine.transition("FINISH");
+    expect(machine.current).toBe("final");
+    
+    // Check that persistent context was NOT cleared (clearOnExit: false)
+    expect(machine.getContext("persistent")).toEqual({ data: "persistent data" });
+  });
+
+  it("should support dynamic setClearContextOnExit configuration", () => {
+    type StateContexts = {
+      start: { data: string };
+      middle: { data: string };
+      end: undefined;
+    };
+
+    const machine = createMachine<StateContexts>("test", (ctx) => {
+      const { state, on } = ctx;
+      return [
+        state("start", () => [on("NEXT", "middle"), on("SKIP", "end")]),
+        state("middle", () => [on("FINISH", "end")]),
+        state("end", () => []),
+      ];
+    });
+
+    // Set context for start state
+    machine.setContext("start", { data: "start data" });
+    expect(machine.getContext("start")).toEqual({ data: "start data" });
+
+    // Configure NEXT event to clear context dynamically
+    machine.setClearContextOnExit("NEXT", true);
+    
+    // Transition with NEXT event (should clear start context)
+    machine.transition("NEXT");
+    expect(machine.current).toBe("middle");
+    expect(machine.getContext("start")).toBeUndefined();
+
+    // Test with a fresh machine for the second scenario
+    const machine2 = createMachine<StateContexts>("test2", (ctx) => {
+      const { state, on } = ctx;
+      return [
+        state("start", () => [on("NEXT", "middle"), on("SKIP", "end")]),
+        state("middle", () => [on("FINISH", "end")]),
+        state("end", () => []),
+      ];
+    });
+
+    machine2.setContext("start", { data: "start data" });
+    
+    // Configure SKIP event to NOT clear context
+    machine2.setClearContextOnExit("SKIP", false);
+    
+    // Transition with SKIP event (should NOT clear start context)
+    machine2.transition("SKIP");
+    expect(machine2.current).toBe("end");
+    expect(machine2.getContext("start")).toEqual({ data: "start data" });
+  });
 });

@@ -28,9 +28,9 @@ const editorMachine = createEditorMachine("editor", (ctx) => {
 
   return [
     state("idle", () => [on("EDIT", "editing")]),
-    state("editing", () => [on("SAVE", "saving"), on("CANCEL", "idle")]),
-    state("saving", () => [on("SUCCESS", "idle"), on("FAILURE", "error")]),
-    state("error", () => [on("RETRY", "editing"), on("DISMISS", "idle")])
+    state<EditorContexts['editing']>("editing", () => [on("SAVE", "saving"), on("CANCEL", "idle")]),
+    state<EditorContexts['saving']>("saving", () => [on("SUCCESS", "idle"), on("FAILURE", "error")], { clearOnExit: true }),
+    state<EditorContexts['error']>("error", () => [on("RETRY", "editing"), on("DISMISS", "idle")], { clearOnExit: true })
   ];
 });
 
@@ -78,5 +78,10 @@ editorMachine.watchEntry<EditorContexts['saving']>("saving", (context) => {
 editorMachine.watchEntry<EditorContexts['error']>("error", (context) => {
   console.error(`Error ${context.code}: ${context.message}`);
 });
+
+// Dynamic configuration: Clear context on specific events
+editorMachine.setClearContextOnExit("SUCCESS", true); // Clear saving context on successful save
+editorMachine.setClearContextOnExit("CANCEL", true);  // Clear editing context when canceling
+editorMachine.setClearContextOnExit("DISMISS", false); // Keep error context when dismissing (override static clearOnExit)
 
 export { editorMachine };

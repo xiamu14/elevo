@@ -29,6 +29,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
   const privateContexts: Record<string, unknown> = {};
   const entryWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
   const exitWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
+  const dynamicClearOnExit: Record<string, boolean> = {};
 
   const stateMap = new Map<string, StateDefinition>();
   const transitionMap = new Map<string, Map<string, string>>();
@@ -47,9 +48,20 @@ export function createMachine<TStates extends Record<string, unknown>>(
     const target = transitions?.get(event);
 
     if (target && stateMap.has(target)) {
+      const currentStateDef = stateMap.get(currentState);
+      
       exitWatchers[currentState]?.forEach((fn) =>
         fn(privateContexts[currentState])
       );
+
+      // Clear context if clearOnExit is true (check both static and dynamic configuration)
+      const shouldClearContext = dynamicClearOnExit[event] !== undefined 
+        ? dynamicClearOnExit[event] 
+        : currentStateDef?.clearOnExit ?? false;
+        
+      if (shouldClearContext) {
+        delete privateContexts[currentState];
+      }
 
       currentState = target;
 
@@ -79,6 +91,10 @@ export function createMachine<TStates extends Record<string, unknown>>(
 
   function setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void {
     privateContexts[state as string] = context;
+  }
+
+  function setClearContextOnExit(event: string, shouldClear: boolean): void {
+    dynamicClearOnExit[event] = shouldClear;
   }
 
   function watchEntry<TContext = unknown>(state: string, fn: (context: TContext) => void): () => void {
@@ -128,10 +144,21 @@ export function createMachine<TStates extends Record<string, unknown>>(
       const target = transitions?.get(event);
       
       if (target && stateMap.has(target)) {
+        const currentStateDef = stateMap.get(currentState);
+        
         // Exit current state
         exitWatchers[currentState]?.forEach((fn) =>
           fn(privateContexts[currentState])
         );
+        
+        // Clear context if clearOnExit is true (check both static and dynamic configuration)
+        const shouldClearContext = dynamicClearOnExit[event] !== undefined 
+          ? dynamicClearOnExit[event] 
+          : currentStateDef?.clearOnExit ?? false;
+          
+        if (shouldClearContext) {
+          delete privateContexts[currentState];
+        }
         
         // Update context before changing state
         if (context !== undefined) {
@@ -168,6 +195,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
     setGlobalOnly,
     getContext,
     setContext,
+    setClearContextOnExit,
     watchEntry,
     watchExit,
     toXStateJSON,
@@ -177,12 +205,14 @@ export function createMachine<TStates extends Record<string, unknown>>(
 function createBuilderContext(): BuilderContext {
   const state: StateBuilder = <T = unknown>(
     name: string,
-    builder: () => TransitionDefinition[]
+    builder: () => TransitionDefinition[],
+    options?: { clearOnExit?: boolean }
   ): StateDefinition<T> => {
     const transitions = builder();
     return {
       name,
       transitions: transitions.map((t) => t as unknown as TransitionDefinition),
+      clearOnExit: options?.clearOnExit ?? false,
     } as StateDefinition<T>;
   };
 

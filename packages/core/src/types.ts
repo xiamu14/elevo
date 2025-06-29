@@ -12,7 +12,7 @@ export interface MachineConfig<TStates extends Record<string, StateConfig>> {
 }
 
 export interface StateBuilder {
-  <T = unknown>(name: string, builder: () => TransitionDefinition[]): StateDefinition<T>;
+  <T = unknown>(name: string, builder: () => TransitionDefinition[], options?: { clearOnExit?: boolean }): StateDefinition<T>;
 }
 
 export interface TransitionBuilder {
@@ -23,6 +23,7 @@ export interface StateDefinition<T = unknown> {
   name: string;
   transitions: TransitionDefinition[];
   contextType?: T; // For type inference only
+  clearOnExit?: boolean; // Whether to clear private context when leaving this state
 }
 
 export interface TransitionDefinition {
@@ -66,6 +67,9 @@ export interface Machine<TStates extends Record<string, unknown>> {
   // State-specific context methods
   getContext<TState extends keyof TStates>(state: TState): TStates[TState] | undefined;
   setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void;
+  
+  // Dynamic context clearing configuration
+  setClearContextOnExit(event: string, shouldClear: boolean): void;
   
   watchEntry<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
   watchExit<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
