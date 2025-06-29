@@ -1,6 +1,6 @@
 export type Event = string;
 
-export interface StateConfig<TContext = any> {
+export interface StateConfig<TContext = unknown> {
   on?: Record<string, string>;
   context?: TContext;
 }
@@ -34,7 +34,7 @@ export interface BuilderContext {
   on: TransitionBuilder;
 }
 
-export interface MachineBuilder<TStates extends Record<string, any>> {
+export interface MachineBuilder<TStates extends Record<string, unknown>> {
   (
     id: string,
     builder: (ctx: BuilderContext) => StateDefinition[]
@@ -42,27 +42,27 @@ export interface MachineBuilder<TStates extends Record<string, any>> {
 }
 
 export interface CurrentState<
-  TStates extends Record<string, any>,
+  TStates extends Record<string, unknown>,
   TCurrentState extends keyof TStates
 > {
   transition<TEvent extends string>(
     event: TEvent,
-    context?: TStates[TCurrentState]
+    context?: unknown
   ): void;
 }
 
-export interface Machine<TStates extends Record<string, any>> {
+export interface Machine<TStates extends Record<string, unknown>> {
   readonly id: string;
   readonly current: keyof TStates;
-  readonly context: TStates[keyof TStates] | undefined;
+  readonly context: unknown;
   readonly globalContext: Record<string, unknown>;
   readonly currentState: CurrentState<TStates, keyof TStates>;
 
   transition(event: string): void;
   can(state: keyof TStates, event: string): boolean;
   setGlobalOnly(ctx: Record<string, unknown>): void;
-  watchEntry(state: keyof TStates, fn: (context: any) => void): () => void;
-  watchExit(state: keyof TStates, fn: (context: any) => void): () => void;
+  watchEntry(state: keyof TStates, fn: (context: unknown) => void): () => void;
+  watchExit(state: keyof TStates, fn: (context: unknown) => void): () => void;
   toXStateJSON(): XStateConfig;
 }
 
@@ -77,7 +77,7 @@ export interface XStateConfig {
   >;
 }
 
-export interface MachineSnapshot<TMachine extends Machine<any>> {
+export interface MachineSnapshot<TMachine extends Machine<Record<string, unknown>>> {
   current: TMachine["current"];
   context: TMachine["context"];
   globalContext: TMachine["globalContext"];

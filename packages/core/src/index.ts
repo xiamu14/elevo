@@ -11,7 +11,7 @@ import type {
 
 export * from "./types";
 
-export function createMachine<TStates extends Record<string, any>>(
+export function createMachine<TStates extends Record<string, unknown>>(
   id: string,
   builder: (ctx: BuilderContext) => StateDefinition[]
 ): Machine<TStates> {
@@ -26,9 +26,9 @@ export function createMachine<TStates extends Record<string, any>>(
   let currentState = initialState;
   let globalContext: Record<string, unknown> = {};
   let globalLocked = false;
-  const privateContexts: Record<string, any> = {};
-  const entryWatchers: Record<string, ((ctx: any) => void)[]> = {};
-  const exitWatchers: Record<string, ((ctx: any) => void)[]> = {};
+  const privateContexts: Record<string, unknown> = {};
+  const entryWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
+  const exitWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
 
   const stateMap = new Map<string, StateDefinition>();
   const transitionMap = new Map<string, Map<string, string>>();
@@ -73,7 +73,7 @@ export function createMachine<TStates extends Record<string, any>>(
     }
   }
 
-  function watchEntry(state: string, fn: (context: any) => void): () => void {
+  function watchEntry(state: string, fn: (context: unknown) => void): () => void {
     if (!entryWatchers[state]) {
       entryWatchers[state] = [];
     }
@@ -85,7 +85,7 @@ export function createMachine<TStates extends Record<string, any>>(
     };
   }
 
-  function watchExit(state: string, fn: (context: any) => void): () => void {
+  function watchExit(state: string, fn: (context: unknown) => void): () => void {
     if (!exitWatchers[state]) {
       exitWatchers[state] = [];
     }
@@ -115,11 +115,29 @@ export function createMachine<TStates extends Record<string, any>>(
   }
 
   const currentStateProxy: CurrentState<TStates, keyof TStates> = {
-    transition<TEvent extends string>(event: TEvent, context?: any): void {
-      if (context) {
-        privateContexts[currentState] = context;
+    transition<TEvent extends string>(event: TEvent, context?: unknown): void {
+      const transitions = transitionMap.get(currentState);
+      const target = transitions?.get(event);
+      
+      if (target && stateMap.has(target)) {
+        // Exit current state
+        exitWatchers[currentState]?.forEach((fn) =>
+          fn(privateContexts[currentState])
+        );
+        
+        // Update context before changing state
+        if (context !== undefined) {
+          privateContexts[target] = context;
+        }
+        
+        // Change state
+        currentState = target;
+        
+        // Enter new state
+        entryWatchers[currentState]?.forEach((fn) =>
+          fn(privateContexts[currentState])
+        );
       }
-      transition(event);
     },
   };
 
