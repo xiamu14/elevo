@@ -1,12 +1,12 @@
-import { useEffect, useMemo } from 'react';
-import { useSnapshot, proxy, subscribe } from 'valtio';
-import type { Machine, MachineSnapshot } from 'elevo';
+import { useEffect, useMemo } from "react";
+import { useSnapshot, proxy, subscribe } from "valtio";
+import type { Machine, MachineSnapshot } from "elevo-shared";
 
 export interface UseMachineReturn<TMachine extends Machine<any>> {
-  current: TMachine['current'];
-  context: TMachine['context'];
-  globalContext: TMachine['globalContext'];
-  currentState: TMachine['currentState'];
+  current: TMachine["current"];
+  context: TMachine["context"];
+  globalContext: TMachine["globalContext"];
+  currentState: TMachine["currentState"];
 }
 
 export function useMachine<TMachine extends Machine<any>>(
@@ -25,7 +25,7 @@ export function useMachine<TMachine extends Machine<any>>(
       },
       get currentState() {
         return machine.currentState;
-      }
+      },
     });
   }, [machine]);
 
@@ -35,18 +35,21 @@ export function useMachine<TMachine extends Machine<any>>(
     const unsubscribe = subscribe(reactiveProxy, () => {
       // This will trigger re-renders via useSnapshot
     });
-    
+
     return unsubscribe;
   }, [reactiveProxy]);
 
   useEffect(() => {
-    const unsubscribeEntry = machine.watchEntry(machine.current as string, () => {
-      // Trigger proxy update when state changes
-      (reactiveProxy as any)._trigger?.();
-    });
-    
+    const unsubscribeEntry = machine.watchEntry(
+      machine.current as string,
+      () => {
+        // Trigger proxy update when state changes
+        (reactiveProxy as any)._trigger?.();
+      }
+    );
+
     const unsubscribeExit = machine.watchExit(machine.current as string, () => {
-      // Trigger proxy update when state changes  
+      // Trigger proxy update when state changes
       (reactiveProxy as any)._trigger?.();
     });
 
@@ -67,18 +70,9 @@ export function useMachine<TMachine extends Machine<any>>(
         Object.assign(reactiveProxy, {
           current: machine.current,
           context: machine.context,
-          globalContext: machine.globalContext
+          globalContext: machine.globalContext,
         });
-      }
-    } as TMachine['currentState']
+      },
+    } as TMachine["currentState"],
   };
-}
-
-export interface ShowProps {
-  when: boolean;
-  children: React.ReactNode;
-}
-
-export function Show({ when, children }: ShowProps) {
-  return when ? <>{children}</> : null;
 }
