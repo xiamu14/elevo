@@ -1,0 +1,484 @@
+---
+title: Getting Started
+description: Quick start guide to building your first state machine with Elevo
+icon: Rocket
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Getting Started
+
+This guide will walk you through setting up Elevo and building your first state machine in just a few minutes. By the end, you'll have a working React application with reactive state management and real-time visualization.
+
+## Installation
+
+<Tabs>
+<Tab value="npm">
+```bash
+# Install core packages
+npm install elevo elevo-react
+
+# Install CLI for visualization (optional but recommended)
+npm install -g elevo-cli
+```
+</Tab>
+
+<Tab value="yarn">
+```bash
+# Install core packages
+yarn add elevo elevo-react
+
+# Install CLI for visualization (optional but recommended)
+yarn global add elevo-cli
+```
+</Tab>
+
+<Tab value="pnpm">
+```bash
+# Install core packages
+pnpm add elevo elevo-react
+
+# Install CLI for visualization (optional but recommended)
+pnpm add -g elevo-cli
+```
+</Tab>
+</Tabs>
+
+## Your First State Machine
+
+Let's create a simple toggle button to understand the basics:
+
+### 1. Create a State Machine File
+
+Create a new file `toggle.state.ts` in your `src` directory:
+
+```tsx title="src/toggle.state.ts"
+import { createMachine } from 'elevo';
+
+export const toggleMachine = createMachine("toggle", (ctx) => {
+  const { state, on } = ctx;
+  
+  return [
+    state("off", () => [on("TOGGLE", "on")]),
+    state("on", () => [on("TOGGLE", "off")])
+  ];
+});
+```
+
+<Callout type="info">
+**File Naming Convention**: Use `.state.ts` extension for state machine files. This allows the CLI visualizer to automatically detect and watch them.
+</Callout>
+
+### 2. Create a React Component
+
+Create a component that uses your state machine:
+
+```tsx title="src/ToggleButton.tsx"
+import React from 'react';
+import { useMachine, Show } from 'elevo-react';
+import { toggleMachine } from './toggle.state';
+
+export function ToggleButton() {
+  const { current, currentState } = useMachine(toggleMachine);
+  
+  return (
+    <div className="p-4">
+      <button
+        onClick={() => currentState.transition("TOGGLE")}
+        className={`
+          px-6 py-3 rounded-lg font-medium transition-colors
+          ${current === "on" 
+            ? "bg-green-500 text-white" 
+            : "bg-gray-200 text-gray-800"
+          }
+        `}
+      >
+        <Show when={current === "on"}>Turn Off</Show>
+        <Show when={current === "off"}>Turn On</Show>
+      </button>
+      
+      <p className="mt-2 text-sm text-gray-600">
+        Current state: <code>{current}</code>
+      </p>
+    </div>
+  );
+}
+```
+
+### 3. Use in Your App
+
+Add the component to your main App:
+
+```tsx title="src/App.tsx"
+import React from 'react';
+import { ToggleButton } from './ToggleButton';
+
+function App() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-lg shadow-lg">
+        <h1 className="text-2xl font-bold mb-6 text-center">
+          My First Elevo State Machine
+        </h1>
+        <ToggleButton />
+      </div>
+    </div>
+  );
+}
+
+export default App;
+```
+
+### 4. Start the Visualizer (Optional)
+
+Open a terminal and run:
+
+```bash
+elevo graph ./src
+```
+
+This will:
+- Watch your `*.state.ts` files for changes
+- Start a WebSocket server on port 8080
+- Open the visualizer at `http://localhost:3000`
+
+You'll see your toggle state machine visualized in real-time!
+
+## Building a More Complex Example
+
+Let's create a more realistic example - a document editor with multiple states:
+
+### 1. Document Editor State Machine
+
+```tsx title="src/editor.state.ts"
+import { createMachine } from 'elevo';
+
+export const editorMachine = createMachine("editor", (ctx) => {
+  const { state, on } = ctx;
+  
+  return [
+    state("loading", () => [
+      on("LOADED", "viewing"),
+      on("ERROR", "error")
+    ]),
+    state("viewing", () => [
+      on("EDIT", "editing"),
+      on("DELETE", "deleting")
+    ]),
+    state("editing", () => [
+      on("SAVE", "saving"),
+      on("CANCEL", "viewing"),
+      on("AUTO_SAVE", "saving")
+    ]),
+    state("saving", () => [
+      on("SUCCESS", "viewing"),
+      on("FAILURE", "editing")
+    ]),
+    state("deleting", () => [
+      on("CONFIRMED", "deleted"),
+      on("CANCELLED", "viewing")
+    ]),
+    state("deleted", () => [
+      on("RESTORE", "viewing")
+    ]),
+    state("error", () => [
+      on("RETRY", "loading"),
+      on("DISMISS", "viewing")
+    ])
+  ];
+});
+
+// Set global context for user information
+editorMachine.setGlobalOnly({
+  userId: "user-123",
+  permissions: ["read", "write", "delete"]
+});
+```
+
+### 2. Editor Component with Context
+
+```tsx title="src/DocumentEditor.tsx"
+import React, { useEffect, useState } from 'react';
+import { useMachine, Show } from 'elevo-react';
+import { editorMachine } from './editor.state';
+
+export function DocumentEditor() {
+  const { current, context, globalContext, currentState } = useMachine(editorMachine);
+  const [content, setContent] = useState('');
+
+  // Handle side effects with watchers
+  useEffect(() => {
+    // Watch for loading state entry
+    const unsubscribeLoading = editorMachine.watchEntry("loading", async () => {
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const mockDocument = {
+          id: "doc-1",
+          title: "My Document",
+          content: "# Welcome to Elevo\n\nThis is a sample document.",
+          lastModified: Date.now()
+        };
+        
+        currentState.transition("LOADED", mockDocument);
+        setContent(mockDocument.content);
+      } catch (error) {
+        currentState.transition("ERROR", { message: "Failed to load document" });
+      }
+    });
+
+    // Watch for saving state entry
+    const unsubscribeSaving = editorMachine.watchEntry("saving", async (context) => {
+      try {
+        // Simulate save API call
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        const updatedDoc = {
+          ...context,
+          content,
+          lastModified: Date.now()
+        };
+        
+        currentState.transition("SUCCESS", updatedDoc);
+      } catch (error) {
+        currentState.transition("FAILURE", { error: "Save failed" });
+      }
+    });
+
+    return () => {
+      unsubscribeLoading();
+      unsubscribeSaving();
+    };
+  }, [currentState, content]);
+
+  // Auto-start loading
+  useEffect(() => {
+    if (current === "loading") return;
+    currentState.transition("LOADED", { id: "initial" });
+  }, []);
+
+  const handleEdit = () => {
+    currentState.transition("EDIT", { 
+      ...context,
+      editStartTime: Date.now() 
+    });
+  };
+
+  const handleSave = () => {
+    currentState.transition("SAVE", {
+      ...context,
+      content,
+      hasChanges: false
+    });
+  };
+
+  const handleCancel = () => {
+    setContent(context?.content || '');
+    currentState.transition("CANCEL");
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Document Editor</h1>
+        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+          <span>State: <code className="bg-gray-100 px-2 py-1 rounded">{current}</code></span>
+          <span>User: {globalContext.userId}</span>
+          {context?.lastModified && (
+            <span>Last saved: {new Date(context.lastModified).toLocaleTimeString()}</span>
+          )}
+        </div>
+      </header>
+
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        {/* Loading State */}
+        <Show when={current === "loading"}>
+          <div className="p-8 text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading document...</p>
+          </div>
+        </Show>
+
+        {/* Viewing State */}
+        <Show when={current === "viewing"}>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">{context?.title}</h2>
+              <button
+                onClick={handleEdit}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Edit Document
+              </button>
+            </div>
+            <div className="prose max-w-none">
+              <pre className="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded">
+                {context?.content}
+              </pre>
+            </div>
+          </div>
+        </Show>
+
+        {/* Editing State */}
+        <Show when={current === "editing"}>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Editing: {context?.title}</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSave}
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full h-64 p-4 border border-gray-300 rounded font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Write your document content here..."
+            />
+          </div>
+        </Show>
+
+        {/* Saving State */}
+        <Show when={current === "saving"}>
+          <div className="p-8 text-center">
+            <div className="animate-pulse w-8 h-8 bg-green-500 rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-600">Saving document...</p>
+          </div>
+        </Show>
+
+        {/* Error State */}
+        <Show when={current === "error"}>
+          <div className="p-8 text-center">
+            <div className="w-8 h-8 bg-red-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+              <span className="text-white text-xl">!</span>
+            </div>
+            <p className="text-red-600 mb-4">{context?.message || "An error occurred"}</p>
+            <button
+              onClick={() => currentState.transition("RETRY")}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Retry
+            </button>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+```
+
+### 3. Update Your App
+
+```tsx title="src/App.tsx"
+import React from 'react';
+import { DocumentEditor } from './DocumentEditor';
+
+function App() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <DocumentEditor />
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Understanding What We Built
+
+### State Flow
+
+Our document editor follows this state flow:
+
+1. **loading** → Fetch document data
+2. **viewing** → Display read-only document
+3. **editing** → Allow content modification
+4. **saving** → Persist changes
+5. **error** → Handle failures
+
+### Key Features Demonstrated
+
+**Functional DSL**: Clean, readable state definitions
+**Context Management**: Document data flows through state transitions
+**Side Effects**: Async operations handled via watchers
+**Reactive UI**: Components automatically update on state changes
+**Type Safety**: TypeScript ensures valid transitions
+
+### Real-Time Visualization
+
+With the CLI running (`elevo graph ./src`), you can:
+
+- See the state machine diagram update as you modify code
+- Watch state transitions happen in real-time
+- Switch between multiple state machines in your project
+- Export diagrams for documentation
+
+## Next Steps
+
+Now that you have a working Elevo application:
+
+1. **Explore the Visualizer**: Interact with your state machine in the web interface
+2. **Add More Complexity**: Try adding parallel states or guards
+3. **Learn Best Practices**: Read about [core concepts](/docs/concepts) and [architecture patterns](/docs/architecture)
+4. **Check the API Reference**: Dive deeper into [advanced features](/docs/api)
+
+<Callout type="tip">
+**Pro Tip**: Keep the visualizer open while developing. It's incredibly helpful for understanding complex state flows and debugging state-related issues.
+</Callout>
+
+## Common Patterns
+
+Here are some patterns you'll use frequently:
+
+### Loading States
+
+```tsx
+state("loading", () => [
+  on("SUCCESS", "loaded"),
+  on("ERROR", "error")
+])
+```
+
+### Form Validation
+
+```tsx
+state("pristine", () => [on("INPUT", "dirty")]),
+state("dirty", () => [on("VALIDATE", "validating")]),
+state("validating", () => [
+  on("VALID", "valid"),
+  on("INVALID", "invalid")
+])
+```
+
+### Modal Dialogs
+
+```tsx
+state("closed", () => [on("OPEN", "open")]),
+state("open", () => [on("CLOSE", "closed"), on("CONFIRM", "confirmed")])
+```
+
+### Async Operations
+
+```tsx
+state("idle", () => [on("START", "processing")]),
+state("processing", () => [
+  on("SUCCESS", "success"),
+  on("FAILURE", "error"),
+  on("CANCEL", "cancelled")
+])
+```
+
+These patterns can be composed and combined to handle increasingly complex application logic while maintaining clarity and type safety.
+
+Ready to build more complex state machines? Check out the [Core Concepts](/docs/concepts) guide to dive deeper into Elevo's architecture and capabilities.

@@ -1,0 +1,283 @@
+---
+title: Introduction
+description: Elevo - A modern TypeScript state machine library for React applications
+icon: Zap
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Welcome to Elevo
+
+**Elevo** is a modern, TypeScript-first state machine library designed specifically for React applications. It combines the power of state machines with functional programming patterns, reactive state management, and real-time visualization tools.
+
+<Callout type="info">
+  Elevo means "elevate" in Latin - representing our mission to elevate state
+  management from simple reducers to sophisticated, visual state machines that
+  make complex application logic both understandable and maintainable.
+</Callout>
+
+## Why Elevo?
+
+State management in modern applications has become increasingly complex. While libraries like Redux, Zustand, and Valtio solve state storage and reactivity, they don't address the fundamental challenge of **modeling complex business logic**. That's where state machines shine - and Elevo makes them accessible, type-safe, and delightful to use.
+
+### The Problem with Traditional State Management
+
+```tsx
+// Traditional approach - imperative and error-prone
+const [state, setState] = useState("idle");
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState(null);
+
+const handleSave = async () => {
+  if (state !== "editing") return; // Easy to forget these guards
+  setLoading(true);
+  try {
+    await saveDocument();
+    setState("saved");
+  } catch (err) {
+    setError(err);
+    setState("error");
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+### The Elevo Way - Declarative and Bulletproof
+
+```tsx
+// Elevo approach - declarative and impossible to break
+const editorMachine = createMachine("editor", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("idle", () => [on("EDIT", "editing")]),
+    state("editing", () => [on("SAVE", "saving"), on("CANCEL", "idle")]),
+    state("saving", () => [on("SUCCESS", "idle"), on("FAILURE", "editing")]),
+  ];
+});
+
+const EditorComponent = () => {
+  const { current, currentState } = useMachine(editorMachine);
+
+  return (
+    <div>
+      <Show when={current === "editing"}>
+        <button onClick={() => currentState.transition("SAVE")}>
+          Save Document
+        </button>
+      </Show>
+    </div>
+  );
+};
+```
+
+## Core Philosophy
+
+Elevo is built on four foundational principles:
+
+### 1. **Functional-First DSL**
+
+Instead of JSON configuration, Elevo uses higher-order functions that provide better TypeScript inference, composition, and readability.
+
+### 2. **Separation of Concerns**
+
+Pure state logic is completely separated from side effects. State machines handle transitions, while business logic is handled through watch callbacks in your components.
+
+### 3. **Multi-Level State Architecture**
+
+Elevo supports three levels of state management:
+
+- **Application-level**: Global state machines for app-wide concerns
+- **Page-level**: Route-specific state machines for page workflows
+- **Component-level**: Local state machines for complex component logic
+
+### 4. **Developer Experience First**
+
+Real-time visualization, excellent TypeScript support, and intuitive APIs make state machines accessible to all developers, not just academics.
+
+## Key Features
+
+<Tabs>
+<Tab value="dsl">
+### Functional DSL
+
+```tsx
+const machine = createMachine("workflow", (ctx) => {
+  const { state, on, action } = ctx;
+
+  return [
+    state("pending", () => [on("START", "active"), on("CANCEL", "cancelled")]),
+    state("active", () => [
+      on("COMPLETE", "completed", action("save", saveData)),
+      on("PAUSE", "pending"),
+    ]),
+    state("completed", () => [on("RESET", "pending")]),
+  ];
+});
+```
+
+</Tab>
+
+<Tab value="types">
+### Complete Type Safety
+
+```tsx
+// TypeScript knows exactly which events are valid for each state
+machine.can("pending", "START"); // ✅ true
+machine.can("pending", "COMPLETE"); // ✅ false
+
+// Auto-completion for valid transitions
+machine.currentState.transition("START"); // ✅ TypeScript suggests valid events
+```
+
+</Tab>
+
+<Tab value="context">
+### Dual Context System
+
+```tsx
+// Global context - set once, immutable
+machine.setGlobalOnly({ userId: "123", theme: "dark" });
+
+// Private context - state-specific, mutable
+machine.currentState.transition("EDIT", {
+  fileName: "document.md",
+  content: "...",
+});
+```
+
+</Tab>
+
+<Tab value="reactive">
+### Reactive Integration
+
+```tsx
+const { current, context, globalContext } = useMachine(editorMachine);
+
+// Automatically re-renders when state changes
+// Works seamlessly with Valtio's reactive system
+return <div>Current state: {current}</div>;
+```
+
+</Tab>
+</Tabs>
+
+## Real-Time Visualization
+
+Elevo includes a complete visualization toolkit that updates in real-time as you develop:
+
+```bash
+# Start the visualizer
+elevo graph ./src
+
+# Opens visualization at http://localhost:3000
+# Shows all your state machines with live updates
+```
+
+The visualizer provides:
+
+- **Interactive state diagrams** with zoom and pan
+- **Real-time updates** as you modify code
+- **Multiple machine switching** with sidebar navigation
+- **XState compatibility** for existing tools
+- **Export capabilities** for documentation
+
+## Quick Start
+
+<Tabs>
+<Tab value="install">
+### Installation
+
+```bash
+# Install core packages
+npm install elevo elevo-react
+
+# Install CLI for visualization (optional)
+npm install -g elevo-cli
+```
+
+</Tab>
+
+<Tab value="basic">
+### Basic Usage
+
+```tsx
+import { createMachine } from "elevo";
+import { useMachine } from "elevo-react";
+
+// 1. Define your state machine
+const toggleMachine = createMachine("toggle", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("off", () => [on("TOGGLE", "on")]),
+    state("on", () => [on("TOGGLE", "off")]),
+  ];
+});
+
+// 2. Use in React component
+function ToggleButton() {
+  const { current, currentState } = useMachine(toggleMachine);
+
+  return (
+    <button onClick={() => currentState.transition("TOGGLE")}>
+      {current === "on" ? "Turn Off" : "Turn On"}
+    </button>
+  );
+}
+```
+
+</Tab>
+
+<Tab value="advanced">
+### Advanced Features
+
+```tsx
+const workflowMachine = createMachine("workflow", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("draft", () => [on("SUBMIT", "review"), on("SAVE_DRAFT", "draft")]),
+    state("review", () => [
+      on("APPROVE", "published"),
+      on("REJECT", "draft"),
+      on("REQUEST_CHANGES", "draft"),
+    ]),
+    state("published", () => [
+      on("UNPUBLISH", "draft"),
+      on("ARCHIVE", "archived"),
+    ]),
+    state("archived", () => [on("RESTORE", "draft")]),
+  ];
+});
+
+// Set global context
+workflowMachine.setGlobalOnly({
+  workspaceId: "workspace-123",
+  userId: "user-456",
+});
+
+// Watch state changes
+const unsubscribe = workflowMachine.watchEntry("published", (context) => {
+  console.log("Document published!", context);
+  // Trigger side effects like notifications
+});
+```
+
+</Tab>
+</Tabs>
+
+## What's Next?
+
+Ready to elevate your state management? Here's where to go next:
+
+- **[Getting Started](/docs/getting-started)** - Detailed setup and first state machine
+- **[Core Concepts](/docs/concepts)** - Understanding Elevo's architecture
+- **[Comparison](/docs/comparison)** - How Elevo compares to XState and Zag.js
+- **[React Integration](/docs/react)** - Deep dive into React bindings
+- **[Visualization](/docs/visualization)** - Using the CLI and visualizer
+- **[API Reference](/docs/api)** - Complete API documentation
+
+<Callout type="tip">
+  **Pro Tip**: Start the visualizer with `elevo graph` while reading these docs
+  to see state machines in action!
+</Callout>

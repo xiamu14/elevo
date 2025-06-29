@@ -1,0 +1,19 @@
+{
+  "name": "elevo-react",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "valtio": "^2.1.5",
+    "elevo": "workspace:*",
+    "elevo-shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0",
+    "typescript": "^5",
+    "valtio": "^2.1.5"
+  }
+}

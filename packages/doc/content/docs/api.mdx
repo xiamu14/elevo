@@ -1,0 +1,558 @@
+---
+title: API Reference
+description: Complete API documentation for Elevo core and React bindings
+icon: Code
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# API Reference
+
+Complete reference for all Elevo APIs, including core state machine functions and React integration.
+
+## Core API
+
+### `createMachine(id, builder)`
+
+Creates a new state machine with the functional DSL.
+
+```tsx
+function createMachine<TStates>(
+  id: string,
+  builder: (ctx: BuilderContext) => StateDefinition[]
+): Machine<TStates>
+```
+
+**Parameters:**
+- `id` (string): Unique identifier for the machine
+- `builder` (function): Function that receives builder context and returns state definitions
+
+**Returns:** Machine instance with methods for state management
+
+**Example:**
+```tsx
+const machine = createMachine("toggle", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("off", () => [on("TOGGLE", "on")]),
+    state("on", () => [on("TOGGLE", "off")])
+  ];
+});
+```
+
+### Builder Context
+
+The builder function receives a context object with these utilities:
+
+#### `state(name, builder)`
+
+Defines a state with its transitions.
+
+```tsx
+function state(
+  name: string, 
+  builder: () => TransitionDefinition[]
+): StateDefinition
+```
+
+**Parameters:**
+- `name` (string): Name of the state
+- `builder` (function): Function returning transition definitions
+
+**Example:**
+```tsx
+state("loading", () => [
+  on("SUCCESS", "loaded"),
+  on("ERROR", "error")
+])
+```
+
+#### `on(event, target, action?)`
+
+Defines a state transition.
+
+```tsx
+function on(
+  event: string,
+  target: string,
+  action?: ActionDefinition
+): TransitionDefinition
+```
+
+**Parameters:**
+- `event` (string): Event that triggers the transition
+- `target` (string): Target state name
+- `action` (optional): Action to execute during transition
+
+**Example:**
+```tsx
+on("SAVE", "saving", action("validate", validateFn))
+```
+
+#### `action(name, fn?)`
+
+Defines an action for transitions.
+
+```tsx
+function action(
+  name: string,
+  fn?: Function
+): ActionDefinition
+```
+
+**Parameters:**
+- `name` (string): Action name
+- `fn` (optional): Function to execute
+
+**Example:**
+```tsx
+action("validate", (context, event) => {
+  return context.content.length > 0;
+})
+```
+
+## Machine Instance API
+
+### Properties
+
+#### `id`
+```tsx
+readonly id: string
+```
+The machine's unique identifier.
+
+#### `current`
+```tsx
+readonly current: keyof TStates
+```
+Current state name (reactive).
+
+#### `context`
+```tsx
+readonly context: TStates[keyof TStates] | undefined
+```
+Current state's private context (reactive).
+
+#### `globalContext`
+```tsx
+readonly globalContext: Record<string, unknown>
+```
+Global application context (reactive).
+
+#### `currentState`
+```tsx
+readonly currentState: CurrentState<TStates, keyof TStates>
+```
+Object with transition methods for the current state.
+
+### Methods
+
+#### `transition(event)`
+
+Execute a state transition.
+
+```tsx
+function transition(event: string): void
+```
+
+**Parameters:**
+- `event` (string): Event to trigger
+
+**Example:**
+```tsx
+machine.transition("START");
+```
+
+#### `can(state, event)`
+
+Check if a transition is valid.
+
+```tsx
+function can(state: keyof TStates, event: string): boolean
+```
+
+**Parameters:**
+- `state` (string): State name to check
+- `event` (string): Event to validate
+
+**Returns:** `true` if transition is valid, `false` otherwise
+
+**Example:**
+```tsx
+if (machine.can("idle", "START")) {
+  machine.transition("START");
+}
+```
+
+#### `setGlobalOnly(context)`
+
+Set global context (can only be called once).
+
+```tsx
+function setGlobalOnly(ctx: Record<string, unknown>): void
+```
+
+**Parameters:**
+- `ctx` (object): Global context data
+
+**Example:**
+```tsx
+machine.setGlobalOnly({
+  userId: "user-123",
+  theme: "dark"
+});
+```
+
+<Callout type="warning">
+Global context can only be set once. Subsequent calls will log a warning and be ignored.
+</Callout>
+
+#### `watchEntry(state, callback)`
+
+Watch for state entry.
+
+```tsx
+function watchEntry(
+  state: keyof TStates, 
+  fn: (context: any) => void
+): () => void
+```
+
+**Parameters:**
+- `state` (string): State to watch
+- `fn` (function): Callback function
+
+**Returns:** Unsubscribe function
+
+**Example:**
+```tsx
+const unsubscribe = machine.watchEntry("loading", (context) => {
+  console.log("Entered loading state", context);
+});
+
+// Later...
+unsubscribe();
+```
+
+#### `watchExit(state, callback)`
+
+Watch for state exit.
+
+```tsx
+function watchExit(
+  state: keyof TStates, 
+  fn: (context: any) => void
+): () => void
+```
+
+**Parameters:**
+- `state` (string): State to watch
+- `fn` (function): Callback function
+
+**Returns:** Unsubscribe function
+
+**Example:**
+```tsx
+const unsubscribe = machine.watchExit("editing", (context) => {
+  console.log("Exited editing state", context);
+});
+```
+
+#### `toXStateJSON()`
+
+Export machine definition as XState-compatible JSON.
+
+```tsx
+function toXStateJSON(): XStateConfig
+```
+
+**Returns:** XState-compatible configuration object
+
+**Example:**
+```tsx
+const xstateConfig = machine.toXStateJSON();
+console.log(JSON.stringify(xstateConfig, null, 2));
+```
+
+### Current State API
+
+#### `transition(event, context?)`
+
+Execute transition with optional context.
+
+```tsx
+function transition<TEvent extends string>(
+  event: TEvent,
+  context?: any
+): void
+```
+
+**Parameters:**
+- `event` (string): Event to trigger
+- `context` (optional): Context data for target state
+
+**Example:**
+```tsx
+machine.currentState.transition("EDIT", {
+  fileName: "document.md",
+  content: "# Hello World"
+});
+```
+
+## React Integration API
+
+### `useMachine(machine)`
+
+React hook for state machine integration.
+
+```tsx
+function useMachine<TMachine extends Machine<any>>(
+  machine: TMachine
+): UseMachineReturn<TMachine>
+```
+
+**Parameters:**
+- `machine`: State machine instance
+
+**Returns:** Object with reactive state and methods
+
+**Example:**
+```tsx
+const { current, context, globalContext, currentState } = useMachine(editorMachine);
+```
+
+### UseMachine Return Type
+
+#### `current`
+```tsx
+current: TMachine['current']
+```
+Current state name (reactive).
+
+#### `context`
+```tsx
+context: TMachine['context']
+```
+Current state's context (reactive).
+
+#### `globalContext`
+```tsx
+globalContext: TMachine['globalContext']
+```
+Global application context (reactive).
+
+#### `currentState`
+```tsx
+currentState: TMachine['currentState']
+```
+Object with transition methods.
+
+### `Show` Component
+
+Conditional rendering component.
+
+```tsx
+interface ShowProps {
+  when: boolean;
+  children: React.ReactNode;
+}
+
+function Show({ when, children }: ShowProps): JSX.Element | null
+```
+
+**Props:**
+- `when` (boolean): Condition to show children
+- `children`: React nodes to render conditionally
+
+**Example:**
+```tsx
+<Show when={current === "editing"}>
+  <EditingControls />
+</Show>
+```
+
+## TypeScript Types
+
+### Core Types
+
+```tsx
+// Machine definition
+interface Machine<TStates extends Record<string, any>> {
+  readonly id: string;
+  readonly current: keyof TStates;
+  readonly context: TStates[keyof TStates] | undefined;
+  readonly globalContext: Record<string, unknown>;
+  readonly currentState: CurrentState<TStates, keyof TStates>;
+  
+  transition(event: string): void;
+  can(state: keyof TStates, event: string): boolean;
+  setGlobalOnly(ctx: Record<string, unknown>): void;
+  watchEntry(state: keyof TStates, fn: (context: any) => void): () => void;
+  watchExit(state: keyof TStates, fn: (context: any) => void): () => void;
+  toXStateJSON(): XStateConfig;
+}
+
+// Builder context
+interface BuilderContext {
+  state: StateBuilder;
+  on: TransitionBuilder;
+  action: ActionBuilder;
+}
+
+// State definition
+interface StateDefinition {
+  name: string;
+  transitions: TransitionDefinition[];
+}
+
+// Transition definition
+interface TransitionDefinition {
+  event: string;
+  target: string;
+  action?: ActionDefinition;
+}
+
+// Action definition
+interface ActionDefinition {
+  name: string;
+  fn?: Function;
+}
+```
+
+### React Types
+
+```tsx
+// useMachine return type
+interface UseMachineReturn<TMachine extends Machine<any>> {
+  current: TMachine['current'];
+  context: TMachine['context'];
+  globalContext: TMachine['globalContext'];
+  currentState: TMachine['currentState'];
+}
+
+// Machine snapshot for visualization
+interface MachineSnapshot<TMachine extends Machine<any>> {
+  current: TMachine['current'];
+  context: TMachine['context'];
+  globalContext: TMachine['globalContext'];
+}
+```
+
+## Advanced Usage Patterns
+
+### Generic State Machines
+
+```tsx
+// Create reusable async machine pattern
+function createAsyncMachine<TData, TError = Error>(
+  id: string
+) {
+  return createMachine(id, (ctx) => {
+    const { state, on } = ctx;
+    return [
+      state("idle", () => [on("FETCH", "loading")]),
+      state("loading", () => [
+        on("SUCCESS", "success"),
+        on("ERROR", "error")
+      ]),
+      state("success", () => [on("RESET", "idle")]),
+      state("error", () => [on("RETRY", "loading")])
+    ];
+  });
+}
+
+// Usage with type safety
+const userMachine = createAsyncMachine<User>("users");
+const postMachine = createAsyncMachine<Post[]>("posts");
+```
+
+### Composable State Patterns
+
+```tsx
+// Reusable state pattern
+const createLoadingStates = (successState: string, errorState: string) => [
+  on("SUCCESS", successState),
+  on("ERROR", errorState),
+  on("CANCEL", "idle")
+];
+
+// Use in multiple machines
+const machine1 = createMachine("machine1", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("idle", () => [on("START", "loading")]),
+    state("loading", () => createLoadingStates("success", "error")),
+    state("success", () => [on("RESET", "idle")]),
+    state("error", () => [on("RETRY", "loading")])
+  ];
+});
+```
+
+### Context Type Safety
+
+```tsx
+// Define context types
+interface EditingContext {
+  fileName: string;
+  content: string;
+  lastModified: number;
+}
+
+interface SavingContext {
+  fileName: string;
+  content: string;
+  saveStarted: number;
+}
+
+// Use with type annotations
+machine.currentState.transition("EDIT", {
+  fileName: "doc.md",
+  content: "Hello",
+  lastModified: Date.now()
+} as EditingContext);
+```
+
+### Error Handling
+
+```tsx
+// Handle transition errors gracefully
+try {
+  machine.currentState.transition("INVALID_EVENT");
+} catch (error) {
+  console.warn("Invalid transition attempted:", error);
+}
+
+// Check validity before transitioning
+if (machine.can(machine.current, "SAVE")) {
+  machine.currentState.transition("SAVE");
+} else {
+  console.warn("Cannot save in current state");
+}
+```
+
+### Testing Utilities
+
+```tsx
+// Test helper functions
+function expectState(machine: Machine<any>, expectedState: string) {
+  expect(machine.current).toBe(expectedState);
+}
+
+function expectTransition(
+  machine: Machine<any>, 
+  event: string, 
+  expectedState: string
+) {
+  machine.transition(event);
+  expectState(machine, expectedState);
+}
+
+// Usage in tests
+it('should transition correctly', () => {
+  expectTransition(machine, "START", "running");
+  expectTransition(machine, "STOP", "idle");
+});
+```
+
+This API reference covers all public APIs available in Elevo. For more examples and patterns, see the [Getting Started](/docs/getting-started) guide and [Core Concepts](/docs/concepts) documentation.

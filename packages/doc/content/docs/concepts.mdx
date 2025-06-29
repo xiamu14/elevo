@@ -1,0 +1,543 @@
+---
+title: Core Concepts
+description: Understanding Elevo's architecture and design principles
+icon: Brain
+---
+
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Core Concepts
+
+Elevo introduces several key concepts that make state machines both powerful and accessible. Understanding these concepts will help you build robust, scalable applications with clear state management.
+
+## State Machines Fundamentals
+
+### What is a State Machine?
+
+A state machine is a mathematical model that describes the behavior of a system with a finite number of states. At any given time, the system is in exactly one state, and transitions between states are triggered by events.
+
+```tsx
+// A simple toggle state machine
+const toggleMachine = createMachine("toggle", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("off", () => [on("TOGGLE", "on")]),   // State: off, Event: TOGGLE -> on
+    state("on", () => [on("TOGGLE", "off")])    // State: on, Event: TOGGLE -> off
+  ];
+});
+```
+
+### Why State Machines Matter
+
+**Predictability**: Impossible states become impossible to reach
+**Debugging**: Clear state transitions make bugs easier to track
+**Testing**: Finite states make comprehensive testing achievable
+**Communication**: Visual state diagrams improve team understanding
+
+## Elevo's Functional DSL
+
+### The Problem with JSON Configuration
+
+Traditional state machine libraries use object/JSON configuration:
+
+```tsx
+// Traditional approach - verbose and error-prone
+const machine = createMachine({
+  id: 'editor',
+  initial: 'idle',
+  states: {
+    idle: {
+      on: {
+        EDIT: 'editing'
+      }
+    },
+    editing: {
+      on: {
+        SAVE: { target: 'saving', actions: ['validateInput'] },
+        CANCEL: 'idle'
+      }
+    }
+  }
+});
+```
+
+**Problems:**
+- Poor TypeScript inference
+- Difficult to compose and reuse
+- No compile-time validation
+- Verbose and repetitive
+
+### Elevo's Solution: Functional DSL
+
+```tsx
+// Elevo's functional approach - clean and type-safe
+const editorMachine = createMachine("editor", (ctx) => {
+  const { state, on, action } = ctx;
+  return [
+    state("idle", () => [on("EDIT", "editing")]),
+    state("editing", () => [
+      on("SAVE", "saving", action("validate", validateInput)),
+      on("CANCEL", "idle")
+    ]),
+    state("saving", () => [
+      on("SUCCESS", "idle"),
+      on("FAILURE", "editing")
+    ])
+  ];
+});
+```
+
+**Advantages:**
+- Excellent TypeScript inference
+- Functional composition
+- Compile-time validation
+- Readable and concise
+- Easy to refactor
+
+## Dual Context System
+
+Elevo introduces a unique dual context system that separates global application state from local state transitions.
+
+### Global Context
+
+Global context is application-wide state that remains constant throughout the machine's lifetime:
+
+```tsx
+const workflowMachine = createMachine("workflow", (ctx) => {
+  // Define states...
+});
+
+// Set global context once - becomes immutable
+workflowMachine.setGlobalOnly({
+  userId: "user-123",
+  workspaceId: "workspace-456",
+  permissions: ["read", "write"]
+});
+
+// Subsequent calls are ignored with warning
+workflowMachine.setGlobalOnly({ userId: "different" }); // ⚠️ Warning logged
+```
+
+**Use Cases for Global Context:**
+- User authentication data
+- Environment configuration
+- Feature flags
+- Workspace/tenant information
+
+### Private Context
+
+Private context is state-specific data that changes with transitions:
+
+```tsx
+// Each state can have its own context
+machine.currentState.transition("EDIT", {
+  fileName: "document.md",
+  content: "# My Document",
+  lastModified: Date.now()
+});
+
+// Context is automatically scoped to current state
+const { context } = useMachine(machine);
+console.log(context.fileName); // Available only in editing-related states
+```
+
+**Benefits of Dual Context:**
+- Clear separation of concerns
+- Prevents accidental global state mutations
+- Better performance through selective reactivity
+- Easier debugging and testing
+
+## Multi-Level State Architecture
+
+Elevo promotes a layered approach to state management that scales with application complexity.
+
+### Application Level
+
+Global state machines that manage app-wide concerns:
+
+```tsx
+// Authentication state machine
+const authMachine = createMachine("auth", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("unauthenticated", () => [on("LOGIN", "authenticating")]),
+    state("authenticating", () => [
+      on("SUCCESS", "authenticated"),
+      on("FAILURE", "unauthenticated")
+    ]),
+    state("authenticated", () => [on("LOGOUT", "unauthenticated")])
+  ];
+});
+
+// Theme state machine  
+const themeMachine = createMachine("theme", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("light", () => [on("TOGGLE", "dark")]),
+    state("dark", () => [on("TOGGLE", "light")])
+  ];
+});
+```
+
+### Page Level
+
+State machines that manage page or route-specific workflows:
+
+```tsx
+// Document editing workflow
+const documentWorkflow = createMachine("document", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("loading", () => [
+      on("LOADED", "viewing"),
+      on("ERROR", "error")
+    ]),
+    state("viewing", () => [
+      on("EDIT", "editing"),
+      on("DELETE", "deleting")
+    ]),
+    state("editing", () => [
+      on("SAVE", "saving"),
+      on("CANCEL", "viewing")
+    ]),
+    state("saving", () => [
+      on("SUCCESS", "viewing"),
+      on("FAILURE", "editing")
+    ])
+  ];
+});
+```
+
+### Component Level
+
+Local state machines for complex component interactions:
+
+```tsx
+// Modal dialog state machine
+const modalMachine = createMachine("modal", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("closed", () => [on("OPEN", "opening")]),
+    state("opening", () => [on("OPENED", "open")]),
+    state("open", () => [on("CLOSE", "closing")]),
+    state("closing", () => [on("CLOSED", "closed")])
+  ];
+});
+
+// Form validation state machine
+const formMachine = createMachine("form", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("pristine", () => [on("INPUT", "dirty")]),
+    state("dirty", () => [
+      on("VALIDATE", "validating"),
+      on("SUBMIT", "submitting")
+    ]),
+    state("validating", () => [
+      on("VALID", "valid"),
+      on("INVALID", "invalid")
+    ]),
+    state("valid", () => [on("SUBMIT", "submitting")]),
+    state("invalid", () => [on("INPUT", "dirty")])
+  ];
+});
+```
+
+## Side Effect Management
+
+Elevo takes a unique approach to side effects by completely separating them from state logic.
+
+### The Problem with Built-in Side Effects
+
+```tsx
+// Traditional approach - side effects mixed with state logic
+const machine = createMachine({
+  // ...states
+}, {
+  services: {
+    fetchUser: () => fetch('/api/user'),
+    saveData: (context) => saveToDatabase(context.data)
+  },
+  actions: {
+    logTransition: () => console.log('State changed'),
+    sendAnalytics: (context, event) => analytics.track(event.type)
+  }
+});
+```
+
+**Problems:**
+- Makes testing difficult
+- Couples state logic with implementation details
+- Hard to modify side effects without changing state definition
+- Difficult to debug and trace
+
+### Elevo's Watch-Based Approach
+
+```tsx
+// Pure state machine - no side effects
+const userMachine = createMachine("user", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("idle", () => [on("FETCH", "loading")]),
+    state("loading", () => [
+      on("SUCCESS", "loaded"),
+      on("ERROR", "error")
+    ]),
+    state("loaded", () => [on("REFRESH", "loading")]),
+    state("error", () => [on("RETRY", "loading")])
+  ];
+});
+
+// Side effects handled separately through watchers
+const unsubscribeEntry = userMachine.watchEntry("loading", async (context) => {
+  try {
+    const userData = await fetchUser(context.userId);
+    userMachine.currentState.transition("SUCCESS", userData);
+  } catch (error) {
+    userMachine.currentState.transition("ERROR", { error: error.message });
+  }
+});
+
+const unsubscribeExit = userMachine.watchExit("loading", (context) => {
+  // Cleanup any pending requests
+  cancelPendingRequests();
+});
+```
+
+**Benefits:**
+- Pure state machines are easy to test
+- Side effects can be modified independently
+- Better separation of concerns
+- Easier to debug and trace execution
+- More flexible error handling
+
+## Reactive Integration
+
+Elevo integrates seamlessly with Valtio for reactive state management in React.
+
+### How Reactivity Works
+
+```tsx
+// State machine is wrapped in Valtio proxy
+const { current, context, globalContext } = useMachine(editorMachine);
+
+// These values are reactive - component re-renders on changes
+return (
+  <div>
+    <h1>State: {current}</h1>
+    <p>File: {context?.fileName}</p>
+    <p>User: {globalContext.userId}</p>
+  </div>
+);
+```
+
+### Selective Reactivity
+
+Elevo only triggers re-renders when relevant state changes:
+
+```tsx
+// Only re-renders when current state changes
+const { current } = useMachine(machine);
+
+// Only re-renders when context changes
+const { context } = useMachine(machine);
+
+// Re-renders when either current or context changes
+const { current, context } = useMachine(machine);
+```
+
+## Event Handling & Transitions
+
+### Type-Safe Transitions
+
+Elevo provides compile-time validation of state transitions:
+
+```tsx
+const machine = createMachine("workflow", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("pending", () => [on("START", "active"), on("CANCEL", "cancelled")]),
+    state("active", () => [on("COMPLETE", "completed")])
+  ];
+});
+
+// TypeScript validates these at compile time
+machine.can("pending", "START");    // ✅ true
+machine.can("pending", "COMPLETE"); // ✅ false (compile-time error in strict mode)
+machine.can("active", "START");     // ✅ false
+
+// Auto-completion for valid events
+machine.currentState.transition("START"); // ✅ TypeScript suggests valid events
+```
+
+### Contextual Transitions
+
+Transitions can include context data:
+
+```tsx
+// Transition with context
+machine.currentState.transition("EDIT", {
+  fileName: "document.md",
+  content: "# New Document",
+  metadata: {
+    createdAt: Date.now(),
+    author: "user-123"
+  }
+});
+
+// Context is available in the target state
+const { context } = useMachine(machine);
+console.log(context.fileName); // "document.md"
+```
+
+## Visualization Integration
+
+Elevo's state machines are designed to work seamlessly with the visualization tools:
+
+### XState Compatibility
+
+```tsx
+// Export to XState format for visualization
+const xstateJson = machine.toXStateJSON();
+console.log(xstateJson);
+// {
+//   "id": "editor",
+//   "initial": "idle",
+//   "states": {
+//     "idle": { "on": { "EDIT": "editing" } },
+//     "editing": { "on": { "SAVE": "saving", "CANCEL": "idle" } }
+//   }
+// }
+```
+
+### Real-Time Updates
+
+The CLI watches your state machine files and automatically updates the visualizer:
+
+```bash
+# Start watching for changes
+elevo graph ./src
+
+# Any changes to *.state.ts files are immediately reflected
+# in the web visualizer at http://localhost:3000
+```
+
+## Testing Strategy
+
+Elevo's pure state machines are easy to test:
+
+### Unit Testing States
+
+```tsx
+describe('Editor Machine', () => {
+  let machine: ReturnType<typeof createMachine>;
+  
+  beforeEach(() => {
+    machine = createMachine("editor", (ctx) => {
+      // ...state definition
+    });
+  });
+
+  it('should start in idle state', () => {
+    expect(machine.current).toBe('idle');
+  });
+
+  it('should transition from idle to editing on EDIT', () => {
+    machine.transition('EDIT');
+    expect(machine.current).toBe('editing');
+  });
+
+  it('should validate available transitions', () => {
+    expect(machine.can('idle', 'EDIT')).toBe(true);
+    expect(machine.can('idle', 'SAVE')).toBe(false);
+  });
+});
+```
+
+### Testing with Context
+
+```tsx
+it('should maintain context across transitions', () => {
+  machine.currentState.transition('EDIT', { fileName: 'test.md' });
+  expect(machine.current).toBe('editing');
+  expect(machine.context).toEqual({ fileName: 'test.md' });
+});
+```
+
+### Integration Testing
+
+```tsx
+import { render, fireEvent } from '@testing-library/react';
+
+it('should handle user interactions correctly', () => {
+  const { getByRole } = render(<EditorComponent />);
+  const editButton = getByRole('button', { name: /edit/i });
+  
+  fireEvent.click(editButton);
+  
+  expect(machine.current).toBe('editing');
+});
+```
+
+## Best Practices
+
+### 1. Keep State Machines Pure
+
+```tsx
+// ✅ Good - Pure state logic
+const machine = createMachine("data", (ctx) => {
+  const { state, on } = ctx;
+  return [
+    state("loading", () => [on("SUCCESS", "loaded"), on("ERROR", "error")])
+  ];
+});
+
+// ❌ Avoid - Side effects in state definition
+// Don't put fetch calls or other side effects in the state machine itself
+```
+
+### 2. Use Descriptive State Names
+
+```tsx
+// ✅ Good - Clear state names
+state("authenticating", () => [...])
+state("uploadingFile", () => [...])
+state("validatingForm", () => [...])
+
+// ❌ Avoid - Vague state names
+state("loading", () => [...])  // Loading what?
+state("busy", () => [...])     // Busy doing what?
+```
+
+### 3. Group Related State Machines
+
+```tsx
+// File: auth/auth.state.ts
+export const authMachine = createMachine("auth", ...);
+
+// File: editor/document.state.ts  
+export const documentMachine = createMachine("document", ...);
+
+// File: ui/modal.state.ts
+export const modalMachine = createMachine("modal", ...);
+```
+
+### 4. Use Global Context Sparingly
+
+```tsx
+// ✅ Good - Stable, app-wide data
+machine.setGlobalOnly({
+  userId: "user-123",
+  theme: "dark",
+  locale: "en-US"
+});
+
+// ❌ Avoid - Frequently changing data
+machine.setGlobalOnly({
+  currentPage: "dashboard",  // This will change often
+  formData: {...}           // This should be private context
+});
+```
+
+These core concepts form the foundation of effective state management with Elevo. By understanding and applying these principles, you'll build more maintainable, testable, and robust applications.
