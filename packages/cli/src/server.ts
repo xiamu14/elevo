@@ -2,6 +2,8 @@ import { WebSocketServer } from "ws";
 import * as crypto from "crypto";
 import type { StateFileInfo, VisualizerMessage } from "./types.js";
 
+const visualizerSite = "https://elevo-visualizer.vercel.app/";
+
 export class VisualizerServer {
   private wss: WebSocketServer | null = null;
   private port: number;
@@ -21,8 +23,10 @@ export class VisualizerServer {
     );
     console.log(`🔑 Token: ${this.token}`);
     console.log(
-      `🌐 Open visualizer at: http://localhost:3000?token=${this.token}\\n`
+      `🌐 Open visualizer at: http://localhost:3000?token=${this.token}`
     );
+
+    console.log(`🌐 Open visualizer at: ${visualizerSite}?token=${this.token}`);
 
     this.wss.on("connection", (ws, req) => {
       console.log("New visualizer connection");

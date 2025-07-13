@@ -2,7 +2,6 @@ export interface StateFileInfo {
   filePath: string;
   machineName: string;
   xstateJson: any;
-  timestamp: number;
 }
 
 export interface CacheEntry {
@@ -11,7 +10,7 @@ export interface CacheEntry {
 }
 
 export interface VisualizerMessage {
-  type: 'state_update' | 'initial_data' | 'error';
+  type: "state_update" | "initial_data" | "error";
   data: StateFileInfo[] | string;
   token: string;
   timestamp: number;

@@ -43,7 +43,6 @@ export class StateFileParser {
         filePath,
         machineName,
         xstateJson,
-        timestamp: Date.now(),
       };
     } catch (error) {
       console.error(`Failed to parse state file ${filePath}:`, error);
@@ -142,7 +141,7 @@ export class StateFileParser {
     console.log(`Found ${files.length} state files`);
 
     for (const file of files) {
-      console.log(`Parsing ${file}...`);
+      console.log(`Parsing ${file}`);
       const parsed = await this.parseStateFile(file);
       if (parsed) {
         results.push(parsed);
