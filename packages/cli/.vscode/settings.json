@@ -6,9 +6,5 @@
         "**/.DS_Store": true,
         "**/Thumbs.db": true
     },
-    "hide-files.files": [],
-    "cSpell.words": [
-        "elevo",
-        "xyflow"
-    ]
+    "hide-files.files": []
 }

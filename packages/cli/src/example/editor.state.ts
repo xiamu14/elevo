@@ -1,4 +1,4 @@
-import { createMachine } from 'elevo';
+import { createMachine } from "elevo";
 
 export const editorMachine = createMachine("editor", (ctx) => {
   const { state, on } = ctx;

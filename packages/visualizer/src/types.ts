@@ -1,3 +1,5 @@
+import { EdgeTypes } from "@xyflow/react";
+
 export interface StateFileInfo {
   filePath: string;
   machineName: string;
@@ -8,13 +10,16 @@ export interface StateFileInfo {
 export interface XStateConfig {
   id: string;
   initial: string;
-  states: Record<string, {
-    on?: Record<string, string | { target: string; actions?: string[] }>;
-  }>;
+  states: Record<
+    string,
+    {
+      on?: Record<string, string | { target: string; actions?: string[] }>;
+    }
+  >;
 }
 
 export interface VisualizerMessage {
-  type: 'state_update' | 'initial_data' | 'error';
+  type: "state_update" | "initial_data" | "error";
   data: StateFileInfo[] | string;
   token: string;
   timestamp: number;
@@ -22,7 +27,7 @@ export interface VisualizerMessage {
 
 export interface GraphNode {
   id: string;
-  type: 'state';
+  type: "state";
   data: {
     label: string;
     isInitial: boolean;
@@ -36,5 +41,5 @@ export interface GraphEdge {
   source: string;
   target: string;
   label: string;
-  type: 'smoothstep';
+  type?: string;
 }
