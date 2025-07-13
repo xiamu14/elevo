@@ -1,5 +1,3 @@
-import { EdgeTypes } from "@xyflow/react";
-
 export interface StateFileInfo {
   filePath: string;
   machineName: string;

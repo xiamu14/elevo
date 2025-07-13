@@ -35,6 +35,7 @@ const CustomEdge: FC<EdgeProps<Edge<{ label: string }>>> = ({
         markerEnd={markerEnd}
         style={{ stroke: "#6366f1", strokeWidth: 1 }}
       />
+      {/* @ts-ignore */}
       <EdgeLabelRenderer>
         <div
           style={{

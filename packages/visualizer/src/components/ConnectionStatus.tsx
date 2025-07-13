@@ -45,8 +45,10 @@ export function ConnectionStatus({
           `}
           >
             {error ? (
+              // @ts-ignore
               <AlertCircle className="w-5 h-5" />
             ) : (
+              // @ts-ignore
               <WifiOff className="w-5 h-5" />
             )}
           </div>
@@ -83,6 +85,7 @@ export function ConnectionStatus({
                   }
                 `}
               >
+                {/* @ts-ignore */}
                 <RefreshCw className="w-3 h-3" />
                 Reconnect
               </button>

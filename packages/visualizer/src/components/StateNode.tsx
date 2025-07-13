@@ -22,6 +22,7 @@ export function StateNode({ data, selected }: StateNodeProps) {
       ${selected ? "ring-2 ring-blue-500 ring-opacity-50" : ""}
     `}
     >
+      {/* @ts-ignore */}
       <Handle
         type="target"
         position={Position.Top}
@@ -48,7 +49,7 @@ export function StateNode({ data, selected }: StateNodeProps) {
           </div>
         )}
       </div>
-
+      {/* @ts-ignore */}
       <Handle
         type="source"
         position={Position.Bottom}

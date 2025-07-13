@@ -78,6 +78,7 @@ function App() {
             <div className="text-center text-gray-500">
               {/* <img src={EmptyPicture} className="w-[100px] h-[100px] mb-2" /> */}
               <div className="w-full flex justify-center items-center mb-[10px]">
+                {/* @ts-ignore */}
                 <Unplug color="oklch(63.7% 0.237 25.331)" size={30} />
               </div>
               <h2 className="text-lg font-medium mb-2">

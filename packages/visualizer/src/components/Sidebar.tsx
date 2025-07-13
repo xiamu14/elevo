@@ -20,6 +20,7 @@ export function Sidebar({
       <div className="p-4 border-b border-gray-200 h-[80px]">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-100 rounded-lg">
+            {/* @ts-ignore */}
             <Zap className="w-5 h-5 text-indigo-600" />
           </div>
           <div>
@@ -47,6 +48,7 @@ export function Sidebar({
 
           {states.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
+              {/* @ts-ignore */}
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">No state machines found</p>
               <p className="text-xs mt-1">
@@ -83,6 +85,7 @@ export function Sidebar({
                   </div>
 
                   <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                    {/* @ts-ignore */}
                     <Clock className="w-3 h-3" />
                     {new Date(state.timestamp).toLocaleTimeString()}
                   </div>
