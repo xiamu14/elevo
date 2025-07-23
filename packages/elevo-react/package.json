@@ -8,8 +8,7 @@
   "dependencies": {
     "react": "^19.1.0",
     "valtio": "^2.1.5",
-    "elevo": "workspace:*",
-    "elevo-shared": "workspace:*"
+    "elevo": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.1.0",
