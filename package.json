@@ -7,8 +7,10 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@changesets/cli": "^2.29.5",
     "@types/bun": "latest",
-    "@types/react": "^19.1.8"
+    "@types/react": "^19.1.8",
+    "renew-it": "^1.5.5"
   },
   "peerDependencies": {
     "typescript": "^5"
