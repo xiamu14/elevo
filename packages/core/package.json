@@ -1,9 +1,17 @@
 {
   "name": "elevo",
   "version": "1.0.0",
-  "module": "src/index.ts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsc"
