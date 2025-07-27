@@ -1,37 +1,65 @@
 import type {
-  StateBuilder,
-  TransitionBuilder,
-  BuilderContext,
   Machine,
-  CurrentState,
   StateDefinition,
-  TransitionDefinition,
   XStateConfig,
+  MachineSpec,
+  CreateMachine,
+  On,
 } from "./types";
 
 export * from "./types";
-
-export function createMachine<TStates extends Record<string, unknown>>(
+const watchEntryGlobalHook = "__global__";
+export function createMachine<
+  TMachine extends MachineSpec,
+  TContext extends Record<TMachine["state"], unknown>,
+  GlobalContext extends Record<string, unknown> = {}
+>(
   id: string,
-  builder: (ctx: BuilderContext) => StateDefinition[]
-): Machine<TStates> {
-  const builderCtx = createBuilderContext();
-  const stateDefinitions = builder(builderCtx);
+  builder: CreateMachine<TMachine>
+): Machine<TMachine, TContext, GlobalContext> {
+  const state = <S extends TMachine["state"]>(
+    state: S,
+    transitions: Array<On<TMachine, S>>,
+    options: { clearOnExit?: boolean } = { clearOnExit: false }
+  ): StateDefinition<TMachine> => {
+    return {
+      name: state,
+      transitions: transitions.map((item) => ({
+        event: item.action,
+        target: item.to,
+      })),
+      options,
+    };
+  };
+
+  const on = <A extends TMachine["action"], From extends TMachine["state"]>(
+    action: A,
+    to: Exclude<TMachine["state"], From>
+  ): On<TMachine, From> => ({
+    type: "transition",
+    from: undefined as any,
+    action,
+    to,
+  });
+  const stateDefinitions = builder({ state, on });
 
   if (stateDefinitions.length === 0) {
     throw new Error("Machine must have at least one state");
   }
 
-  const initialState = stateDefinitions[0]?.name ?? "idle";
+  const initialState = stateDefinitions[0]?.name as TMachine["state"];
   let currentState = initialState;
-  let globalContext: Record<string, unknown> = {};
+  let globalContext: GlobalContext = {} as GlobalContext;
   let globalLocked = false;
-  const privateContexts: Record<string, unknown> = {};
-  const entryWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
+  const privateContexts: TContext = {} as TContext;
+  const entryWatchers: Record<
+    string,
+    ((ctx: unknown, state?: TMachine["state"]) => void)[]
+  > = {};
   const exitWatchers: Record<string, ((ctx: unknown) => void)[]> = {};
   const dynamicClearOnExit: Record<string, boolean> = {};
 
-  const stateMap = new Map<string, StateDefinition>();
+  const stateMap = new Map<string, StateDefinition<TMachine>>();
   const transitionMap = new Map<string, Map<string, string>>();
 
   stateDefinitions.forEach((stateDef) => {
@@ -43,30 +71,39 @@ export function createMachine<TStates extends Record<string, unknown>>(
     transitionMap.set(stateDef.name, transitions);
   });
 
-  function transition(event: string): void {
+  function transition(event: TMachine["action"]): void {
     const transitions = transitionMap.get(currentState);
     const target = transitions?.get(event);
 
     if (target && stateMap.has(target)) {
       const currentStateDef = stateMap.get(currentState);
-      
+
       exitWatchers[currentState]?.forEach((fn) =>
         fn(privateContexts[currentState])
       );
 
       // Clear context if clearOnExit is true (check both static and dynamic configuration)
-      const shouldClearContext = dynamicClearOnExit[event] !== undefined 
-        ? dynamicClearOnExit[event] 
-        : currentStateDef?.clearOnExit ?? false;
-        
+      const shouldClearContext =
+        dynamicClearOnExit[event] !== undefined
+          ? dynamicClearOnExit[event]
+          : currentStateDef?.options?.clearOnExit ?? false;
+
       if (shouldClearContext) {
         delete privateContexts[currentState];
       }
 
       currentState = target;
+      console.log("[test]1", entryWatchers);
 
       entryWatchers[currentState]?.forEach((fn) =>
         fn(privateContexts[currentState])
+      );
+      entryWatchers[watchEntryGlobalHook]?.forEach((fn) => {
+        fn(privateContexts[currentState], currentState);
+      });
+    } else {
+      console.warn(
+        `currentState is ${currentState}, cannot transition to ${target} by action "${event}"`
       );
     }
   }
@@ -76,7 +113,7 @@ export function createMachine<TStates extends Record<string, unknown>>(
     return transitions?.has(event) || false;
   }
 
-  function setGlobalOnly<TGlobal extends Record<string, unknown>>(ctx: TGlobal): void {
+  function setGlobalOnly(ctx: GlobalContext): void {
     if (!globalLocked) {
       globalContext = ctx;
       globalLocked = true;
@@ -85,31 +122,54 @@ export function createMachine<TStates extends Record<string, unknown>>(
     }
   }
 
-  function getContext<TState extends keyof TStates>(state: TState): TStates[TState] | undefined {
-    return privateContexts[state as string] as TStates[TState] | undefined;
+  function getContext<TState extends keyof TContext>(
+    state: TState
+  ): TContext[TState] | undefined {
+    return privateContexts[state] as TContext[TState] | undefined;
   }
 
-  function setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void {
-    privateContexts[state as string] = context;
+  function setContext<TState extends keyof TContext>(
+    state: TState,
+    context: TContext[TState]
+  ): void {
+    privateContexts[state] = context;
   }
 
   function setClearContextOnExit(event: string, shouldClear: boolean): void {
     dynamicClearOnExit[event] = shouldClear;
   }
 
-  function watchEntry<TContext = unknown>(state: string, fn: (context: TContext) => void): () => void {
+  function watchEntry<TContext = unknown>(
+    state: string,
+    fn: (context: TContext) => void
+  ): () => void {
     if (!entryWatchers[state]) {
       entryWatchers[state] = [];
     }
     entryWatchers[state].push(fn as (context: unknown) => void);
 
     return () => {
-      entryWatchers[state] =
-        entryWatchers[state]?.filter((f) => f !== fn) || [];
+      entryWatchers[state] = [];
     };
   }
 
-  function watchExit<TContext = unknown>(state: string, fn: (context: TContext) => void): () => void {
+  function watchEntryGlobal<TContext = unknown>(
+    fn: (context: TContext, state: TMachine["state"]) => void
+  ) {
+    if (!entryWatchers[watchEntryGlobalHook]) {
+      entryWatchers[watchEntryGlobalHook] = [];
+    }
+    entryWatchers[watchEntryGlobalHook].push(fn as (context: unknown) => void);
+
+    return () => {
+      entryWatchers[watchEntryGlobalHook] = [];
+    };
+  }
+
+  function watchExit<TContext = unknown>(
+    state: string,
+    fn: (context: TContext) => void
+  ): () => void {
     if (!exitWatchers[state]) {
       exitWatchers[state] = [];
     }
@@ -138,58 +198,20 @@ export function createMachine<TStates extends Record<string, unknown>>(
     };
   }
 
-  const currentStateProxy: CurrentState<TStates, keyof TStates> = {
-    transition<TEvent extends string, TContext = unknown>(event: TEvent, context?: TContext): void {
-      const transitions = transitionMap.get(currentState);
-      const target = transitions?.get(event);
-      
-      if (target && stateMap.has(target)) {
-        const currentStateDef = stateMap.get(currentState);
-        
-        // Exit current state
-        exitWatchers[currentState]?.forEach((fn) =>
-          fn(privateContexts[currentState])
-        );
-        
-        // Clear context if clearOnExit is true (check both static and dynamic configuration)
-        const shouldClearContext = dynamicClearOnExit[event] !== undefined 
-          ? dynamicClearOnExit[event] 
-          : currentStateDef?.clearOnExit ?? false;
-          
-        if (shouldClearContext) {
-          delete privateContexts[currentState];
-        }
-        
-        // Update context before changing state
-        if (context !== undefined) {
-          privateContexts[target] = context;
-        }
-        
-        // Change state
-        currentState = target;
-        
-        // Enter new state
-        entryWatchers[currentState]?.forEach((fn) =>
-          fn(privateContexts[currentState])
-        );
-      }
-    },
-  };
-
   return {
     id,
     get current() {
-      return currentState as keyof TStates;
+      return currentState;
     },
     get context() {
-      return privateContexts[currentState] as TStates[keyof TStates];
+      return privateContexts[currentState];
     },
     get globalContext() {
       return globalContext;
     },
-    get currentState() {
-      return currentStateProxy;
-    },
+    // get currentState() {
+    //   return currentStateProxy;
+    // },
     transition,
     can,
     setGlobalOnly,
@@ -198,52 +220,31 @@ export function createMachine<TStates extends Record<string, unknown>>(
     setClearContextOnExit,
     watchEntry,
     watchExit,
+    watchEntryGlobal,
     toXStateJSON,
   };
 }
 
-function createBuilderContext(): BuilderContext {
-  const state: StateBuilder = <T = unknown>(
-    name: string,
-    builder: () => TransitionDefinition[],
-    options?: { clearOnExit?: boolean }
-  ): StateDefinition<T> => {
-    const transitions = builder();
-    return {
-      name,
-      transitions: transitions.map((t) => t as unknown as TransitionDefinition),
-      clearOnExit: options?.clearOnExit ?? false,
-    } as StateDefinition<T>;
-  };
-
-  const on: TransitionBuilder = (event: string, target: string) => {
-    return {
-      event,
-      target,
-    } as TransitionDefinition;
-  };
-
-  return { state, on };
-}
-
 // Helper function to create a machine with better type inference
-export function createMachineWithContext<TContexts extends Record<string, unknown>>() {
-  return function<TMachineId extends string>(
-    id: TMachineId,
-    builder: (ctx: BuilderContext) => StateDefinition[]
-  ): Machine<TContexts> {
-    return createMachine<TContexts>(id, builder);
-  };
-}
+// export function createMachineWithContext<
+//   TContexts extends Record<string, unknown>
+// >() {
+//   return function <TMachineId extends string>(
+//     id: TMachineId,
+//     builder: (ctx: BuilderContext) => StateDefinition[]
+//   ): Machine<TContexts> {
+//     return createMachine<TContexts>(id, builder);
+//   };
+// }
 
 // Helper to create typed transition function
-export function createTypedTransition<TContexts extends Record<string, unknown>>(
-  machine: Machine<TContexts>
-) {
-  return function<TState extends keyof TContexts>(
-    event: string,
-    context?: TContexts[TState]
-  ): void {
-    machine.currentState.transition(event, context);
-  };
-}
+// export function createTypedTransition<
+//   TContexts extends Record<string, unknown>
+// >(machine: Machine<TContexts>) {
+//   return function <TState extends keyof TContexts>(
+//     event: string,
+//     context?: TContexts[TState]
+//   ): void {
+//     machine.currentState.transition(event, context);
+//   };
+// }

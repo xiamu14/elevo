@@ -1,5 +1,31 @@
 export type Event = string;
 
+export type MachineSpec = {
+  state: string;
+  action: string;
+};
+
+export type Context<K extends string> = Record<K, unknown>;
+
+export type On<T extends MachineSpec, From extends T["state"]> = {
+  type: "transition";
+  from: From;
+  action: T["action"];
+  to: Exclude<T["state"], From>;
+};
+type StateOptions = { clearOnExit?: boolean };
+export type CreateMachine<T extends MachineSpec> = (ctx: {
+  state: <S extends T["state"]>(
+    state: S,
+    transitions: Array<On<T, S>>,
+    options?: StateOptions
+  ) => StateDefinition<T>;
+  on: <A extends T["action"], From extends T["state"]>(
+    action: A,
+    to: Exclude<T["state"], From>
+  ) => On<T, From>;
+}) => StateDefinition<T>[];
+
 export interface StateConfig<TContext = unknown> {
   on?: Record<string, string>;
   context?: TContext;
@@ -11,37 +37,23 @@ export interface MachineConfig<TStates extends Record<string, StateConfig>> {
   states: TStates;
 }
 
-export interface StateBuilder {
-  <T = unknown>(name: string, builder: () => TransitionDefinition[], options?: { clearOnExit?: boolean }): StateDefinition<T>;
+export interface StateDefinition<TMachine extends MachineSpec> {
+  name: TMachine["state"];
+  transitions: TransitionDefinition<TMachine>[];
+  options: StateOptions;
 }
 
-export interface TransitionBuilder {
-  (event: string, target: string): TransitionDefinition;
+export interface TransitionDefinition<TMachine extends MachineSpec> {
+  event: TMachine["action"];
+  target: TMachine["state"];
 }
 
-export interface StateDefinition<T = unknown> {
-  name: string;
-  transitions: TransitionDefinition[];
-  contextType?: T; // For type inference only
-  clearOnExit?: boolean; // Whether to clear private context when leaving this state
-}
-
-export interface TransitionDefinition {
-  event: string;
-  target: string;
-}
-
-export interface BuilderContext {
-  state: StateBuilder;
-  on: TransitionBuilder;
-}
-
-export interface MachineBuilder<TStates extends Record<string, unknown>> {
-  (
-    id: string,
-    builder: (ctx: BuilderContext) => StateDefinition[]
-  ): Machine<TStates>;
-}
+// export interface MachineBuilder<TStates extends Record<string, unknown>> {
+//   (
+//     id: string,
+//     builder: (ctx: BuilderContext) => StateDefinition[]
+//   ): Machine<TStates>;
+// }
 
 export interface CurrentState<
   TStates extends Record<string, unknown>,
@@ -53,26 +65,43 @@ export interface CurrentState<
   ): void;
 }
 
-export interface Machine<TStates extends Record<string, unknown>> {
+export interface Machine<
+  TMachine extends MachineSpec,
+  TContext extends Record<TMachine["state"], unknown>,
+  GlobalContext extends Record<string, unknown>
+> {
   readonly id: string;
-  readonly current: keyof TStates;
-  readonly context: TStates[keyof TStates];
-  readonly globalContext: Record<string, unknown>;
-  readonly currentState: CurrentState<TStates, keyof TStates>;
+  readonly current: TMachine["state"];
+  readonly context: TContext[TMachine["state"]];
+  readonly globalContext: GlobalContext;
 
-  transition(event: string): void;
-  can(state: keyof TStates, event: string): boolean;
-  setGlobalOnly<TGlobal extends Record<string, unknown>>(ctx: TGlobal): void;
-  
+  transition<E extends TMachine["action"]>(event: E): void;
+  can(state: TMachine["state"], event: TMachine["action"]): boolean;
+  setGlobalOnly(ctx: GlobalContext): void;
+
   // State-specific context methods
-  getContext<TState extends keyof TStates>(state: TState): TStates[TState] | undefined;
-  setContext<TState extends keyof TStates>(state: TState, context: TStates[TState]): void;
-  
+  getContext<TState extends keyof TContext>(
+    state: TState
+  ): TContext[TState] | undefined;
+  setContext<TState extends keyof TContext>(
+    state: TState,
+    context: TContext[TState]
+  ): void;
+
   // Dynamic context clearing configuration
   setClearContextOnExit(event: string, shouldClear: boolean): void;
-  
-  watchEntry<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
-  watchExit<TContext = unknown>(state: keyof TStates, fn: (context: TContext) => void): () => void;
+
+  watchEntry<TContext = unknown>(
+    state: TMachine["state"],
+    fn: (context: TContext) => void
+  ): () => void;
+  watchEntryGlobal<TContext = unknown>(
+    fn: (context: TContext, state: TMachine["state"]) => void
+  ): () => void;
+  watchExit<TContext = unknown>(
+    state: TMachine["state"],
+    fn: (context: TContext) => void
+  ): () => void;
   toXStateJSON(): XStateConfig;
 }
 
@@ -87,11 +116,13 @@ export interface XStateConfig {
   >;
 }
 
-export interface MachineSnapshot<TMachine extends Machine<Record<string, unknown>>> {
-  current: TMachine["current"];
-  context: TMachine["context"];
-  globalContext: TMachine["globalContext"];
-}
+// export interface MachineSnapshot<
+//   TMachine extends Machine<Record<string, unknown>>
+// > {
+//   current: TMachine["current"];
+//   context: TMachine["context"];
+//   globalContext: TMachine["globalContext"];
+// }
 
 // Type helper for defining state machines with typed contexts
 export type StateContextMap<TStates extends Record<string, unknown>> = {
