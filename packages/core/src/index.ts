@@ -2,7 +2,7 @@ import type {
   Machine,
   StateDefinition,
   XStateConfig,
-  MachineSpec,
+  MachineSchema,
   CreateMachine,
   On,
 } from "./types";
@@ -10,8 +10,8 @@ import type {
 export * from "./types";
 const watchEntryGlobalHook = "__global__";
 export function createMachine<
-  TMachine extends MachineSpec,
-  TContext extends Record<TMachine["state"], unknown>,
+  TMachine extends MachineSchema,
+  TContext extends Partial<Record<TMachine["state"], unknown>> = {},
   GlobalContext extends Record<string, unknown> = {}
 >(
   id: string,
@@ -19,29 +19,19 @@ export function createMachine<
 ): Machine<TMachine, TContext, GlobalContext> {
   const state = <S extends TMachine["state"]>(
     state: S,
-    transitions: Array<On<TMachine, S>>,
+    transitions: () => Array<
+      On<TMachine["action"], Exclude<TMachine["state"], S>>
+    >,
     options: { clearOnExit?: boolean } = { clearOnExit: false }
   ): StateDefinition<TMachine> => {
     return {
       name: state,
-      transitions: transitions.map((item) => ({
-        event: item.action,
-        target: item.to,
-      })),
+      transitions: transitions(),
       options,
     };
   };
 
-  const on = <A extends TMachine["action"], From extends TMachine["state"]>(
-    action: A,
-    to: Exclude<TMachine["state"], From>
-  ): On<TMachine, From> => ({
-    type: "transition",
-    from: undefined as any,
-    action,
-    to,
-  });
-  const stateDefinitions = builder({ state, on });
+  const stateDefinitions = builder({ state });
 
   if (stateDefinitions.length === 0) {
     throw new Error("Machine must have at least one state");
@@ -209,9 +199,6 @@ export function createMachine<
     get globalContext() {
       return globalContext;
     },
-    // get currentState() {
-    //   return currentStateProxy;
-    // },
     transition,
     can,
     setGlobalOnly,

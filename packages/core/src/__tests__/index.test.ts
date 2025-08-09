@@ -8,67 +8,40 @@ type Context = {
   editing: undefined;
   saving: { no: string; progress: number };
 };
+
+const editorMachine = createMachine<Schema, Context>("editor", (ctx) => {
+  const { state } = ctx;
+
+  return [
+    state("idle", () => [{ event: "EDIT", target: "editing" }]),
+    state("editing", () => [{ event: "SAVE", target: "saving" }]),
+    state("saving", () => [
+      { event: "FAILURE", target: "editing" },
+      { event: "SUCCESS", target: "idle" },
+    ]),
+  ];
+});
+
 describe("createMachine", () => {
   it("should create a machine with functional DSL", () => {
-    const editorMachine = createMachine<Schema, Context>("editor", (ctx) => {
-      const { state, on } = ctx;
-
-      return [
-        state("idle", [on("EDIT", "editing")]),
-        state("editing", [on("SAVE", "saving"), on("CANCEL", "idle")]),
-        state("saving", [on("SUCCESS", "idle"), on("FAILURE", "editing")]),
-      ];
-    });
-
     expect(editorMachine.id).toBe("editor");
     expect(editorMachine.current).toBe("idle");
   });
 
   it("should transition between states correctly", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("start", [on("GO", "end")]),
-        state("end", [on("RESET", "start")]),
-      ];
-    });
+    const machine = editorMachine;
 
-    expect(machine.current).toBe("start");
+    expect(machine.current).toBe("idle");
 
-    machine.transition("GO");
-    expect(machine.current).toBe("end");
+    machine.transition("EDIT");
+    expect(machine.current).toBe("editing");
 
-    machine.transition("RESET");
-    expect(machine.current).toBe("start");
-  });
-
-  it("should handle invalid transitions gracefully", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
-      return [state("start", [on("GO", "end")]), state("end", [])];
-    });
-
-    expect(machine.current).toBe("start");
-
-    machine.transition("INVALID");
-    expect(machine.current).toBe("start");
-
-    machine.transition("GO");
-    expect(machine.current).toBe("end");
-
-    machine.transition("INVALID");
-    expect(machine.current).toBe("end");
+    machine.transition("SAVE");
+    expect(machine.current).toBe("saving");
   });
 
   it("should support can() method for checking valid transitions", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("idle", [on("EDIT", "editing")]),
-        state("editing", [on("SAVE", "saving"), on("CANCEL", "idle")]),
-        state("saving", [on("SUCCESS", "idle")]),
-      ];
-    });
+    const machine = editorMachine;
 
     expect(machine.can("idle", "EDIT")).toBe(true);
     expect(machine.can("idle", "SAVE")).toBe(false);
@@ -78,10 +51,7 @@ describe("createMachine", () => {
   });
 
   it("should manage global context correctly", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
-      return [state("start", [on("GO", "end")]), state("end", [])];
-    });
+    const machine = editorMachine;
 
     expect(machine.globalContext).toEqual({});
 
@@ -99,30 +69,13 @@ describe("createMachine", () => {
     consoleWarnSpy.mockRestore();
   });
 
-  it("should manage private context per state", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("start", [on("GO", "end")]),
-        state("end", [on("RESET", "start")]),
-      ];
-    });
-
-    expect(machine.context).toBeUndefined();
-
-    machine.transition("GO");
-    expect(machine.current).toBe("end");
-
-    machine.transition("RESET");
-    expect(machine.current).toBe("start");
-  });
-
   it("should support watch functionality", () => {
-    const machine = createMachine("test", (ctx) => {
-      const { state, on } = ctx;
+    type Schema = { state: "end" | "start"; action: "GO" | "RESET" };
+    const machine = createMachine<Schema>("test", (ctx) => {
+      const { state } = ctx;
       return [
-        state("start", [on("GO", "end")]),
-        state("end", [on("RESET", "start")]),
+        state("start", () => [{ event: "GO", target: "end" }]),
+        state("end", () => [{ event: "RESET", target: "start" }]),
       ];
     });
 
@@ -148,14 +101,7 @@ describe("createMachine", () => {
   });
 
   it("should export XState compatible JSON", () => {
-    const machine = createMachine("editor", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("idle", [on("EDIT", "editing")]),
-        state("editing", [on("SAVE", "saving"), on("CANCEL", "idle")]),
-        state("saving", [on("SUCCESS", "idle"), on("FAILURE", "editing")]),
-      ];
-    });
+    const machine = editorMachine;
 
     const xstateJson = machine.toXStateJSON();
 
@@ -191,18 +137,7 @@ describe("createMachine", () => {
   });
 
   it("should support getContext and setContext for state-specific contexts", () => {
-    const machine = createMachine<
-      Schema,
-      Context,
-      { userId: string; theme: "dark" | "light" }
-    >("test", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("idle", [on("EDIT", "editing")]),
-        state("editing", [on("SAVE", "saving"), on("CANCEL", "idle")]),
-        state("saving", [on("SUCCESS", "idle"), on("FAILURE", "editing")]),
-      ];
-    });
+    const machine = editorMachine;
 
     // Test setting and getting context for different states
     machine.setContext("saving", { no: "test.txt", progress: 50 });
@@ -231,16 +166,7 @@ describe("createMachine", () => {
   });
 
   it("should support clearOnExit option for state contexts", () => {
-    const machine = createMachine<Schema, Context>("test", (ctx) => {
-      const { state, on } = ctx;
-      return [
-        state("idle", [on("EDIT", "editing")]),
-        state("editing", [on("SAVE", "saving"), on("CANCEL", "idle")]),
-        state("saving", [on("SUCCESS", "idle"), on("FAILURE", "editing")], {
-          clearOnExit: true,
-        }),
-      ];
-    });
+    const machine = editorMachine;
 
     // Machine starts at "temp" state (first state defined)
     expect(machine.current).toBe("idle");

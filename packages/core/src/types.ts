@@ -1,29 +1,26 @@
 export type Event = string;
 
-export type MachineSpec = {
+export type MachineSchema = {
   state: string;
   action: string;
 };
 
-export type Context<K extends string> = Record<K, unknown>;
+export type Context<K extends string> = Partial<Record<K, unknown>>;
 
-export type On<T extends MachineSpec, From extends T["state"]> = {
-  type: "transition";
-  from: From;
-  action: T["action"];
-  to: Exclude<T["state"], From>;
+export type On<
+  T extends MachineSchema["action"],
+  S extends MachineSchema["state"]
+> = {
+  event: T;
+  target: S;
 };
 type StateOptions = { clearOnExit?: boolean };
-export type CreateMachine<T extends MachineSpec> = (ctx: {
+export type CreateMachine<T extends MachineSchema> = (ctx: {
   state: <S extends T["state"]>(
     state: S,
-    transitions: Array<On<T, S>>,
+    transitions: () => Array<On<T["action"], Exclude<T["state"], S>>>,
     options?: StateOptions
   ) => StateDefinition<T>;
-  on: <A extends T["action"], From extends T["state"]>(
-    action: A,
-    to: Exclude<T["state"], From>
-  ) => On<T, From>;
 }) => StateDefinition<T>[];
 
 export interface StateConfig<TContext = unknown> {
@@ -37,13 +34,13 @@ export interface MachineConfig<TStates extends Record<string, StateConfig>> {
   states: TStates;
 }
 
-export interface StateDefinition<TMachine extends MachineSpec> {
+export interface StateDefinition<TMachine extends MachineSchema> {
   name: TMachine["state"];
   transitions: TransitionDefinition<TMachine>[];
   options: StateOptions;
 }
 
-export interface TransitionDefinition<TMachine extends MachineSpec> {
+export interface TransitionDefinition<TMachine extends MachineSchema> {
   event: TMachine["action"];
   target: TMachine["state"];
 }
@@ -66,7 +63,7 @@ export interface CurrentState<
 }
 
 export interface Machine<
-  TMachine extends MachineSpec,
+  TMachine extends MachineSchema,
   TContext extends Record<TMachine["state"], unknown>,
   GlobalContext extends Record<string, unknown>
 > {

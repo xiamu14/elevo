@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useSnapshot, proxy, subscribe } from "valtio";
-import type { Machine, MachineSpec } from "elevo";
+import type { Machine, MachineSchema } from "elevo";
 
 export interface UseMachineReturn<TMachine extends Machine<any, any, any>> {
   current: TMachine["current"];
